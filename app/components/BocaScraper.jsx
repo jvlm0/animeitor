@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import BrazilianFinals from "./BrazilianFinals"
 
-export default function BocaScraper({ teamsDict = {} }) {
+export default function BocaScraper({ teamsDict = {}, letters = [] }) {
   const [scoreData, setScoreData] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [error, setError] = useState('');
@@ -51,6 +51,23 @@ export default function BocaScraper({ teamsDict = {} }) {
     }
   }, []);
 
+
+  const handleScrapeByTime = useCallback(async () => {
+    setError('');
+    console.log("BOCA SCRAPPEER"+letters)
+    try {
+      const response = await fetch('api/boca-scraper?mode=getStateByTime&time=' + minutosDesde("13:00"));
+      const data = await response.json();
+
+      if (data.success) {
+        setScoreData(data.data.ranking);
+        setSubmissions(data.data.runs);
+      }
+    } catch (err) {
+      setError('Erro ao buscar dados de score: ' + err.message);
+    }
+  }, []);
+
   const handleScrapSub = useCallback(async () => {
     setError('');
 
@@ -69,11 +86,11 @@ export default function BocaScraper({ teamsDict = {} }) {
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     await Promise.all([
-      handleScrapeScore(),
-      handleScrapSub()
+      handleScrapeByTime(),
+      //handleScrapSub()
     ]);
     setIsLoading(false);
-  }, [handleScrapeScore, handleScrapSub]);
+  }, [handleScrapeByTime]);
 
   // Carrega dados inicialmente e configura atualização periódica
   useEffect(() => {
@@ -95,6 +112,7 @@ export default function BocaScraper({ teamsDict = {} }) {
         initialScoreboard={scoreData}
         initialSubmissions={submissions}
         teamsDict={teamsDict}
+        letters={letters}
       />
     </>
   );

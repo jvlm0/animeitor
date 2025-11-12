@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HelpCircle, X, CheckCircle } from 'lucide-react';
 import Balao from "./Balao"
+import BalaoEstrela from './BalaoEstrela'
 
-export default function BrazilianFinals({ initialScoreboard = [], initialSubmissions = [], teamsDict = {} }) {
+export default function BrazilianFinals({ initialScoreboard = [], initialSubmissions = [], teamsDict = {}, letters = [] }) {
   const [time, setTime] = useState('1:00:00');
   const [scoreboard, setScoreboard] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -59,12 +60,13 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
   // Processa as últimas submissões
   useEffect(() => {
     if (initialSubmissions.length > 0) {
-      const recentSubmissions = initialSubmissions.slice(0, 9).map(sub => ({
+      const recentSubmissions = initialSubmissions.reverse().slice(0, 20).map(sub => ({
         time: sub.time,
         team: sub.teamName,
         problem: sub.problem,
         status: sub.answer === 'YES' ? 'green' : 'red',
         answer: sub.answer,
+        firstToSolve: sub.firstToSolve,
         tries: sub.tries > 0 ? sub.tries : ''
       }));
       setSubmissions(recentSubmissions);
@@ -186,7 +188,9 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
           <div className="flex flex-col items-center justify-center h-full">
 
 
-            <Balao color={problemColor} text={displayData.tries} />
+            {problemData.firstToSolve ?
+              <BalaoEstrela color={problemColor} text={displayData.tries} />
+              : <Balao color={problemColor} text={displayData.tries} />}
 
             <div className="text-white font-bold text-xs">
 
@@ -294,16 +298,16 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
               <table className="w-full text-sm border-collapse table-fixed">
                 <thead>
                   <tr className="bg-gray-700 border-b-2 border-white">
-                    <th className="px-3 py-2 text-center border-r border-gray-600 w-8">#</th>
-                    <th className="px-3 py-2 text-left border-r border-gray-600 w-70">Team</th>
-                    <th className="px-2 py-2 text-center border-r border-gray-600 bg-gray-800 w-14">
+                    <th className="px-3 py-2 text-center border-r border-gray-600 w-[5%]">#</th>
+                    <th className="px-3 py-2 text-left border-r border-gray-600 w-[40%]">Team</th>
+                    <th className="px-2 py-2 text-center border-r border-gray-600 bg-gray-800 w-[7%]">
 
-                      <div className="text-xs text-gray-400">Score</div>
+                      <div className="inline-block text-xs text-gray-400 leading-none">Score</div>
                     </th>
-                    {problemLetters.map((letter, index) => (
+                    {letters.map((letter, index) => (
                       <th
                         key={letter}
-                        className={`px-3 py-2 text-center bg-gray-800 w-12 ${index < problemLetters.length - 1 ? 'border-r border-gray-600' : ''}`}
+                        className={`px-3 py-2 text-center bg-gray-800 w-[7%] ${index < problemLetters.length - 1 ? 'border-r border-gray-600' : ''}`}
                       >
                         {letter}
                       </th>
@@ -416,8 +420,8 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                           </motion.div>
                         </motion.td>
 
-                        {problemLetters.map((letter, index) =>
-                          renderProblemCell(team, letter, index === problemLetters.length - 1)
+                        {letters.map((letter, index) =>
+                          renderProblemCell(team, letter, index === letters.length - 1)
                         )}
                       </motion.tr>
                     ))}

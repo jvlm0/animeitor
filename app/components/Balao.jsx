@@ -25,7 +25,7 @@ export default function Balao({
 
   let textColor = isLightColor() ? "#000" : "#fff";
 
-  if (color === '#00fe01') {
+  if (color === '00fe01') {
     textColor = "#000"
   } 
 
@@ -52,7 +52,7 @@ export default function Balao({
         y="40%"
         dominantBaseline="middle"
         textAnchor="middle"
-        fontSize="36"
+        fontSize="50"
         fontWeight="bold"
         fill={textColor}
         style={{ pointerEvents: "none" }}

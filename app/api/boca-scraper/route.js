@@ -158,7 +158,7 @@ async function loga() {
     }
 }
 
-async function  getTeamsDict() {
+async function getTeamsDict() {
     const dict = {}
     const data = await scrap();
 
@@ -173,7 +173,7 @@ async function  getTeamsDict() {
 
     data.forEach((el) => {
         dict[el.userSite.split("/")[0]] = el.name;
-    } )
+    })
 
     return dict;
 }
@@ -225,7 +225,7 @@ async function scrapRuns() {
 
         // Extrai apenas YES / NO
         const answer = answerRaw.startsWith("YES") ? "YES" :
-                       answerRaw.startsWith("NO")  ? "NO"  : answerRaw;
+            answerRaw.startsWith("NO") ? "NO" : answerRaw;
 
         // Também podemos extrair a descrição do erro, ex: "Wrong answer"
         const answerDetail = answerRaw.replace(/^YES|^NO|-|\s/g, "").trim();
@@ -247,7 +247,7 @@ async function scrapRuns() {
             aj: aj || null,
             answer,
             answerDetail
-            
+
         });
     });
 
@@ -260,88 +260,153 @@ async function scrapRuns() {
 
 
 function ensureCounter(obj, keys) {
-  let current = obj;
+    let current = obj;
 
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i];
-    if (!current[key]) current[key] = {};
-    current = current[key];
-  }
+    for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i];
+        if (!current[key]) current[key] = {};
+        current = current[key];
+    }
 
-  const last = keys[keys.length - 1];
-  if (current[last] == null) current[last] = 0;
+    const last = keys[keys.length - 1];
+    if (current[last] == null) current[last] = 0;
 
-  return current[last];
+    return current[last];
 }
 
 async function computeRankingAtTime(t) {
-  // Filtra submissões até o tempo t
-  
-  let subs = await scrapRuns();
+    // Filtra submissões até o tempo t
 
-  if (subs === 'Session expired') {
-    await loga();
-    subs = await scrapRuns();
-  }
-  
-  console.log(subs);
+    let subs = await scrapRuns();
+    let teamsDict = await getTeamsDict();
 
-  const filteredRuns = subs.filter(run => Number(run.time) <= t);
-
-  // Dicionário: team -> { problems: {}, solved, penalty }
-  const teams = {};
-
-  for (const run of filteredRuns) {
-    const { teamName, problem, time, answer } = run;
-    if (!teams[teamName]) {
-      teams[teamName] = {
-        problems: {},
-        solved: 0,
-        penalty: 0
-      };
+    if (subs === 'Session expired') {
+        await loga();
+        subs = await scrapRuns();
+        teamsDict = await getTeamsDict();
     }
 
-    const team = teams[teamName];
-    if (!team.problems[problem]) {
-      team.problems[problem] = { tries: 0, time: null, solved: false };
+    // 🔹 1. Filtra submissões até o tempo t e ordena cronologicamente
+    const filtered = subs
+        .map(r => ({ ...r, time: Number(r.time) }))
+        .filter(r => r.time <= t)
+        .sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
+
+    // 🔹 2. Descobrir quem foi o primeiro a resolver cada problema
+    const firstSolveByProblem = {}; // { 'A': { teamName, time } }
+
+    for (const run of filtered) {
+        if (run.answer === "YES" && !firstSolveByProblem[run.problem]) {
+            firstSolveByProblem[run.problem] = {
+                teamName: run.teamName,
+                time: run.time
+            };
+        }
     }
 
-    const p = team.problems[problem];
+    // 🔹 3. Montar o estado dos times
+    const teams = {};
 
-    // Se já foi resolvido, ignora submissões posteriores
-    if (p.solved) continue;
+    for (const run of filtered) {
+        const teamKey = run.teamName;
+        const problem = run.problem;
+        const time = run.time;
+        const answer = run.answer;
 
-    if (answer === "NO") {
-      p.tries++;
-    } else if (answer === "YES") {
-      p.solved = true;
-      p.time = Number(time);
-      team.solved++;
-      team.penalty += p.time + 20 * p.tries;
+        // adiciona flag se essa submissão foi a primeira a resolver o problema
+        const firstToSolve =
+            answer === "YES" &&
+            firstSolveByProblem[problem]?.teamName === teamKey &&
+            firstSolveByProblem[problem]?.time === time;
+
+        // armazena essa informação na submissão filtrada
+        run.firstToSolve = firstToSolve;
+
+        if (!teams[teamKey]) {
+            teams[teamKey] = { name: teamKey, problems: {}, solved: 0, penalty: 0 };
+        }
+
+        const team = teams[teamKey];
+        if (!team.problems[problem]) {
+            team.problems[problem] = {
+                tries: 0,
+                time: null,
+                solved: false,
+                firstToSolve: false
+            };
+        }
+
+        const p = team.problems[problem];
+        if (p.solved) continue; // ignora submissões após o AC
+
+        if (answer === "NO") {
+            p.tries++;
+        } else if (answer === "YES") {
+            p.tries++;
+            p.time = time;
+            p.solved = true;
+            p.firstToSolve = firstToSolve; // marca no problema do ranking
+
+            team.solved++;
+            team.penalty += p.time + 20 * (p.tries - 1);
+        }
     }
-  }
 
-  // Gera o ranking ordenado
-  const ranking = Object.entries(teams)
-    .map(([teamName, data]) => ({
-      userSite: teamName,
-      solved: data.solved,
-      penalty: data.penalty,
-      problems: data.problems
-    }))
-    .sort((a, b) => {
-      if (b.solved !== a.solved) return b.solved - a.solved;
-      return a.penalty - b.penalty;
-    })
-    .map((t, i) => ({ ...t, pos: i + 1 }));
+    // 🔹 4. Montar o ranking ordenado
+    const ranking = Object.entries(teams)
+        .map(([teamKey, data]) => ({
+            userSite: teamKey,
+            name: teamsDict[data.name],
+            problems: data.problems,
+            solved: data.solved,
+            penalty: data.penalty
+        }))
+        .sort((a, b) => {
+            if (b.solved !== a.solved) return b.solved - a.solved;
+            if (a.penalty !== b.penalty) return a.penalty - b.penalty;
+            return a.userSite.localeCompare(b.userSite);
+        })
+        .map((team, idx) => ({ pos: idx + 1, ...team }));
 
-  return {
-    time: t,
-    ranking,
-    runs: filteredRuns
-  };
+    // 🔹 5. Retornar o estado completo
+    return {
+        time: t,
+        ranking,
+        runs: filtered,        
+    };
 }
 
+
+async function scrapLetters() {
+    const response = await fetchWithCookies('/judge/score.php');
+    const html = await response.text();
+
+    if (html.includes('Session expired') || html.includes('log in again')) {
+        console.error('⚠️ Sessão expirou durante o scraping!');
+        isLoggedIn = false;
+        globalCookies = '';
+        return 'Session expired'
+    }
+
+    const $ = cheerio.load(html);
+
+
+
+    const header = $("#myscoretable tr").first();
+
+
+
+    const headers = header.find('td').map((i, el) => {
+        return $(el).text().split(' ')[0];
+    }).get();
+
+    const letters = headers.filter(h => /^[A-Z]$/.test(h));
+
+    console.log("letras " + letters)
+
+    return letters;
+
+}
 
 
 async function scrap() {
@@ -419,16 +484,16 @@ export async function GET(request) {
         const mode = searchParams.get("mode");
 
         //await loga();
-        
+
         let data;
-        if (mode === "score"){
+        if (mode === "score") {
             data = await scrap();
             if (data === 'Session expired') {
                 await loga();
                 data = await scrap();
             }
 
-        } else if (mode === "runs"){
+        } else if (mode === "runs") {
             data = await scrapRuns();
             if (data === 'Session expired') {
                 await loga();
@@ -451,8 +516,14 @@ export async function GET(request) {
         } else if (mode === 'getStateByTime') {
             const time = Number(searchParams.get('time'));
             data = await computeRankingAtTime(time);
+        } else if (mode === 'letters') {
+            data = await scrapLetters();
+            if (data === 'Session expired') {
+                await loga();
+                data = await scrapLetters();
+            }
         }
-       
+
 
         console.log('\n✅ Requisição concluída com sucesso!\n');
 
