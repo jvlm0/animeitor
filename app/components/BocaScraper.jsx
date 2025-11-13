@@ -10,7 +10,7 @@ export default function BocaScraper({ teamsDict = {}, letters = [] }) {
   const [isLoading, setIsLoading] = useState(false);
 
   // Intervalo em milissegundos (30 segundos)
-  const REFRESH_INTERVAL = 30000;
+  const REFRESH_INTERVAL = 2000;
 
   function minutosDesde(horario) {
     // Divide "13:00" em [13, 00]
@@ -31,8 +31,7 @@ export default function BocaScraper({ teamsDict = {}, letters = [] }) {
     return diffMin;
   }
 
-  // Exemplo:
-  console.log(minutosDesde("13:00"));
+  const tempoDeInicio = '19:53:00';
 
   const handleScrapeScore = useCallback(async () => {
     setError('');
@@ -56,7 +55,7 @@ export default function BocaScraper({ teamsDict = {}, letters = [] }) {
     setError('');
     console.log("BOCA SCRAPPEER"+letters)
     try {
-      const response = await fetch('api/boca-scraper?mode=getStateByTime&time=' + minutosDesde("13:00"));
+      const response = await fetch('api/boca-scraper?mode=getStateByTime&time=' + minutosDesde(tempoDeInicio));
       const data = await response.json();
 
       if (data.success) {
@@ -113,6 +112,7 @@ export default function BocaScraper({ teamsDict = {}, letters = [] }) {
         initialSubmissions={submissions}
         teamsDict={teamsDict}
         letters={letters}
+        START_TIME={tempoDeInicio}
       />
     </>
   );

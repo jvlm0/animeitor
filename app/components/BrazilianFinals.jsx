@@ -5,7 +5,7 @@ import { HelpCircle, X, CheckCircle } from 'lucide-react';
 import Balao from "./Balao"
 import BalaoEstrela from './BalaoEstrela'
 
-export default function BrazilianFinals({ initialScoreboard = [], initialSubmissions = [], teamsDict = {}, letters = [] }) {
+export default function BrazilianFinals({ initialScoreboard = [], initialSubmissions = [], teamsDict = {}, letters = [], START_TIME = "13:00:00" }) {
   const [time, setTime] = useState('1:00:00');
   const [scoreboard, setScoreboard] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -17,12 +17,14 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
   const [submissionResults, setSubmissionResults] = useState({});
   const [teamEmotes, setTeamEmotes] = useState({});
   const [teamFailEmotes, setTeamFailEmotes] = useState({});
+  const [previousSubmissionsState, setPreviousSubmissionsState] = useState({});
+  const [previousPositions, setPreviousPositions] = useState({});
 
   const successEmotesList = ['🎉', '🔥', '⚡', '💪', '🚀', '⭐', '🏆', '👏', '💯', '✨'];
   const failEmotesList = ['😭', '😢', '😡', '😤', '😠', '💀', '😱', '😨', '🤬', '💔'];
 
   // coloque isso antes do useEffect do timer
-  const START_TIME = "13:00:00"; // hora que será considerada como T=0
+  //const START_TIME = "13:00:00"; // hora que será considerada como T=0
 
   function parseTimeToDate(timeString) {
     const [h, m, s] = timeString.split(":").map(Number);
@@ -57,21 +59,110 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
     }
   }, [initialScoreboard]);
 
-  // Processa as últimas submissões
+  // Processa as últimas submissões e detecta pendentes
   useEffect(() => {
     if (initialSubmissions.length > 0) {
-      const recentSubmissions = initialSubmissions.reverse().slice(0, 20).map(sub => ({
+      const recentSubmissions = initialSubmissions.reverse().slice(0, 40).map(sub => ({
         time: sub.time,
         team: sub.teamName,
         problem: sub.problem,
-        status: sub.answer === 'YES' ? 'green' : 'red',
+        status: sub.answer === 'YES' ? 'green' : sub.answer === 'NO' ? 'red' : 'pending',
         answer: sub.answer,
         firstToSolve: sub.firstToSolve,
-        tries: sub.tries > 0 ? sub.tries : ''
+        tries: sub.tries > 0 ? sub.tries : '',
+        isPending: !sub.answer || sub.answer === '?' || sub.answer === 'PENDING'
       }));
       setSubmissions(recentSubmissions);
+
+      // Detecta submissões pendentes e mudanças de estado
+      const newPendingSubmissions = {};
+      const newSubmissionResults = {};
+
+      initialSubmissions.forEach(sub => {
+        const key = `${sub.teamName}-${sub.problem}`;
+        const previousState = previousSubmissionsState[key];
+        
+        // Determina o estado atual
+        const isPending = !sub.answer || sub.answer === '?' || sub.answer === 'PENDING';
+        const currentAnswer = sub.answer;
+        
+        if (isPending) {
+          // Submissão está pendente
+          newPendingSubmissions[key] = true;
+        } else {
+          // Submissão foi julgada
+          // Só mostra o resultado animado se o estado mudou de pendente para julgado
+          if (previousState && previousState.isPending && !isPending) {
+            newSubmissionResults[key] = currentAnswer === 'YES' ? 'accepted' : 'rejected';
+            
+            // Remove o resultado após 2 segundos
+            setTimeout(() => {
+              setSubmissionResults(prev => {
+                const updated = { ...prev };
+                delete updated[key];
+                return updated;
+              });
+            }, 2000);
+          }
+        }
+      });
+
+      // Atualiza estados
+      setPendingSubmissions(newPendingSubmissions);
+      setSubmissionResults(prev => ({ ...prev, ...newSubmissionResults }));
+
+      // Salva o estado atual para comparação futura
+      const newState = {};
+      initialSubmissions.forEach(sub => {
+        const key = `${sub.teamName}-${sub.problem}`;
+        newState[key] = {
+          isPending: !sub.answer || sub.answer === '?' || sub.answer === 'PENDING',
+          answer: sub.answer
+        };
+      });
+      setPreviousSubmissionsState(newState);
     }
   }, [initialSubmissions]);
+
+  // Detecta mudanças de posição no ranking
+  useEffect(() => {
+    if (scoreboard.length > 0) {
+      const goingUp = [];
+      const goingDown = [];
+
+      scoreboard.forEach(team => {
+        const previousPos = previousPositions[team.id];
+        
+        if (previousPos !== undefined && previousPos !== team.pos) {
+          if (team.pos < previousPos) {
+            // Posição diminuiu = subiu no ranking
+            goingUp.push(team.id);
+          } else {
+            // Posição aumentou = desceu no ranking
+            goingDown.push(team.id);
+          }
+        }
+      });
+
+      if (goingUp.length > 0 || goingDown.length > 0) {
+        setTeamsGoingUp(goingUp);
+        setTeamsGoingDown(goingDown);
+
+        // Remove as animações após 2 segundos
+        setTimeout(() => {
+          setTeamsGoingUp([]);
+          setTeamsGoingDown([]);
+        }, 2000);
+      }
+
+      // Atualiza as posições anteriores
+      const newPositions = {};
+      scoreboard.forEach(team => {
+        newPositions[team.id] = team.pos;
+      });
+      setPreviousPositions(newPositions);
+    }
+  }, [scoreboard]);
 
   useEffect(() => {
     const start = parseTimeToDate(START_TIME);
@@ -173,7 +264,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
     return (
       <motion.td
         key={`${team.id}-${problemLetter}`}
-        className={`px-3 py-2 text-center text-xs font-bold w-20 ${isLast ? '' : 'border-r border-gray-600'} ${getCellColor(problemData)} relative border-2 border-gray-700`}
+        className={`px-2 py-1 text-center text-xs font-bold w-20 ${isLast ? '' : 'border-r border-gray-600'} ${getCellColor(problemData)} relative border-2 border-gray-700`}
         animate={{
           filter: teamsGoingUp.includes(team.id)
             ? 'brightness(1.3)'
@@ -184,7 +275,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
         transition={{ duration: 0.5 }}
       >
         {/* Problema Correto - Balão com tempo */}
-        {displayData.type === 'correct' && (
+        {displayData.type === 'correct' && !isPending && (
           <div className="flex flex-col items-center justify-center h-full">
 
 
@@ -200,7 +291,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
         )}
 
         {/* Problema Errado - X com tentativas */}
-        {displayData.type === 'wrong' && (
+        {displayData.type === 'wrong' && !isPending && (
           <div className="flex flex-col items-center justify-center h-full">
             <X className="w-8 h-8 text-red-500 stroke-[3] mb-1" />
             <div className="text-red-400 font-bold text-sm">{displayData.tries}</div>
@@ -208,14 +299,14 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
         )}
 
         {/* Problema não tentado */}
-        {displayData.type === 'empty' && (
+        {displayData.type === 'empty' && !isPending && (
           <div className="h-full"></div>
         )}
 
         {isPending && (
           <motion.div
-            className="absolute inset-0 flex items-center justify-center bg-yellow-500 bg-opacity-80"
-            animate={{ opacity: [1, 0.4, 1] }}
+            className="absolute inset-0 flex items-center justify-center bg-yellow-500"
+            animate={{ opacity: [1, 0.5, 1] }}
             transition={{ duration: 0.8, repeat: Infinity }}
           >
             <HelpCircle className="w-6 h-6 text-white" />
@@ -272,14 +363,23 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                     <div className="w-10 text-center bg-gray-900 rounded px-2 py-1 font-bold">
                       {sub.problem}
                     </div>
-                    <div className={`w-10 flex items-center  justify-center rounded ml-2  font-bold text-sm`}>
-                      {sub.answer == "YES"
-                        ? <Balao color={getProblemColor(sub.problem)} text={sub.tries} />
-                        : <div className="flex flex-col items-center justify-center h-full">
+                    <div className={`w-10 flex items-center justify-center rounded ml-2 font-bold text-sm relative`}>
+                      {sub.isPending ? (
+                        <motion.div
+                          className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center"
+                          animate={{ opacity: [1, 0.4, 1] }}
+                          transition={{ duration: 0.8, repeat: Infinity }}
+                        >
+                          <HelpCircle className="w-6 h-6 text-white" />
+                        </motion.div>
+                      ) : sub.answer === "YES" ? (
+                        <Balao color={getProblemColor(sub.problem)} text={sub.tries} />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full">
                           <X className="w-8 h-8 text-red-500 stroke-[3] mb-1" />
                           <div className="text-red-400 font-bold text-sm">{sub.tries}</div>
                         </div>
-                      }
+                      )}
                     </div>
                   </div>
                 ))
@@ -298,16 +398,16 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
               <table className="w-full text-sm border-collapse table-fixed">
                 <thead>
                   <tr className="bg-gray-700 border-b-2 border-white">
-                    <th className="px-3 py-2 text-center border-r border-gray-600 w-[5%]">#</th>
-                    <th className="px-3 py-2 text-left border-r border-gray-600 w-[40%]">Team</th>
-                    <th className="px-2 py-2 text-center border-r border-gray-600 bg-gray-800 w-[7%]">
+                    <th className="px-3 py-1 text-center border-r border-gray-600 w-[5%]">#</th>
+                    <th className="px-3 py-1 text-left border-r border-gray-600 w-[40%]">Team</th>
+                    <th className="px-2 py-1 text-center border-r border-gray-600 bg-gray-800 w-[7%]">
 
                       <div className="inline-block text-xs text-gray-400 leading-none">Score</div>
                     </th>
                     {letters.map((letter, index) => (
                       <th
                         key={letter}
-                        className={`px-3 py-2 text-center bg-gray-800 w-[7%] ${index < problemLetters.length - 1 ? 'border-r border-gray-600' : ''}`}
+                        className={`px-2 py-1 text-center bg-gray-800 w-[7%] ${index < problemLetters.length - 1 ? 'border-r border-gray-600' : ''}`}
                       >
                         {letter}
                       </th>
@@ -330,7 +430,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                         className="hover:bg-gray-700 relative"
                       >
                         <motion.td
-                          className="px-3 py-2 text-center font-bold border-r border-gray-600"
+                          className="px-3 py-1 text-center font-bold border-r border-gray-600"
                           animate={{
                             backgroundColor: getPositionColor(team.pos, teamsGoingUp.includes(team.id), teamsGoingDown.includes(team.id))
                           }}
@@ -347,7 +447,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                         </motion.td>
 
                         <motion.td
-                          className="px-2 py-2 border-r border-gray-600 relative font-bold"
+                          className="px-2 py-1 border-r border-gray-600 relative font-bold"
                           animate={{
                             backgroundColor: teamsGoingUp.includes(team.id)
                               ? 'rgba(34, 197, 94, 0.3)'
@@ -398,7 +498,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                         </motion.td>
 
                         <motion.td
-                          className="px-3 py-2 text-center border-r border-gray-600 bg-gray-800 w-20"
+                          className="px-3 py-1 text-center border-r border-gray-600 bg-gray-800 w-20"
                           animate={{
                             backgroundColor: teamsGoingUp.includes(team.id)
                               ? 'rgba(34, 197, 94, 0.4)'

@@ -1,13 +1,14 @@
 // app/api/boca-scraper/route.js
 import crypto from 'crypto';
 import * as cheerio from "cheerio";
-import { log, time } from 'console';
-import { data } from 'framer-motion/client';
 
 const BASE_URL = 'http://maratona.td.utfpr.edu.br/boca';
 
-// ✅ Armazena cookies globalmente
-let globalCookies = '';
+
+
+globalThis.globalCookies = '';
+globalThis.teamsDict = {};
+globalThis.letters = [];
 
 
 function jsMyHash(value) {
@@ -18,13 +19,13 @@ async function fetchWithCookies(url, options = {}) {
     const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`;
 
     console.log(`🌐 Requisição para: ${fullUrl}`);
-    console.log(`🍪 Cookies enviados: ${globalCookies || '(nenhum)'}`);
+    console.log(`🍪 Cookies enviados: ${globalThis.globalCookies || '(nenhum)'}`);
 
     const response = await fetch(fullUrl, {
         ...options,
         headers: {
             ...options.headers,
-            'Cookie': globalCookies,
+            'Cookie': globalThis.globalCookies,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -50,8 +51,8 @@ async function fetchWithCookies(url, options = {}) {
         const cookieMap = new Map();
 
         // Cookies existentes
-        if (globalCookies) {
-            globalCookies.split('; ').forEach(c => {
+        if (globalThis.globalCookies) {
+            globalThis.globalCookies.split('; ').forEach(c => {
                 const [name, value] = c.split('=');
                 cookieMap.set(name, value);
             });
@@ -63,11 +64,11 @@ async function fetchWithCookies(url, options = {}) {
             if (name && value) cookieMap.set(name, value);
         });
 
-        globalCookies = Array.from(cookieMap.entries())
+        globalThis.globalCookies = Array.from(cookieMap.entries())
             .map(([name, value]) => `${name}=${value}`)
             .join('; ');
 
-        console.log(`🍪 Cookies atualizados: ${globalCookies}`);
+        console.log(`🍪 Cookies atualizados: ${globalThis.globalCookies}`);
     }
 
     return response;
@@ -148,34 +149,41 @@ async function loga() {
         isLoggedIn = true;
         lastLoginTime = now;
         console.log('✅ Login realizado com sucesso!');
-        console.log(`✅ Cookies finais: ${globalCookies}`);
+        console.log(`✅ Cookies finais: ${globalThis.globalCookies}`);
 
     } catch (error) {
         console.error('❌ Erro no login:', error.message);
         isLoggedIn = false;
-        globalCookies = ''; // Limpa cookies em caso de erro
+        globalThis.globalCookies = ''; // Limpa cookies em caso de erro
         throw error;
     }
 }
 
 async function getTeamsDict() {
-    const dict = {}
-    const data = await scrap();
+
+    if (Object.keys(globalThis.teamsDict).length > 0) return globalThis.teamsDict; 
+
+    let data = await scrap();
+
+    if (data === 'Session expired') {
+        await loga();
+        data = await scrap();
+    }
 
     console.log("getTeam")
     console.log(data)
     if (data == 'Session expired') {
         console.error('⚠️ Sessão expirou durante o scraping!');
         isLoggedIn = false;
-        globalCookies = '';
+        globalThis.globalCookies = '';
         return 'Session expired'
     }
 
     data.forEach((el) => {
-        dict[el.userSite.split("/")[0]] = el.name;
+        globalThis.teamsDict[el.userSite.split("/")[0]] = el.name;
     })
 
-    return dict;
+    return globalThis.teamsDict;
 }
 
 async function scrapRuns() {
@@ -186,7 +194,7 @@ async function scrapRuns() {
     if (html.includes('Session expired') || html.includes('log in again')) {
         console.error('⚠️ Sessão expirou durante o scraping!');
         isLoggedIn = false;
-        globalCookies = '';
+        globalThis.globalCookies = '';
         return 'Session expired'
     }
 
@@ -274,11 +282,14 @@ function ensureCounter(obj, keys) {
     return current[last];
 }
 
-async function computeRankingAtTime(t) {
+async function computeRankingAtTime(t, teamsDict) {
     // Filtra submissões até o tempo t
 
     let subs = await scrapRuns();
-    let teamsDict = await getTeamsDict();
+    if (teamsDict == {}) {
+        teamsDict = await getTeamsDict();
+    }
+    
 
     if (subs === 'Session expired') {
         await loga();
@@ -286,13 +297,13 @@ async function computeRankingAtTime(t) {
         teamsDict = await getTeamsDict();
     }
 
-    // 🔹 1. Filtra submissões até o tempo t e ordena cronologicamente
+    // 🔹 1. Filtrar submissões até o tempo t
     const filtered = subs
         .map(r => ({ ...r, time: Number(r.time) }))
         .filter(r => r.time <= t)
         .sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
 
-    // 🔹 2. Descobrir quem foi o primeiro a resolver cada problema
+    // 🔹 2. Identificar o primeiro time a resolver cada problema
     const firstSolveByProblem = {}; // { 'A': { teamName, time } }
 
     for (const run of filtered) {
@@ -304,26 +315,34 @@ async function computeRankingAtTime(t) {
         }
     }
 
-    // 🔹 3. Montar o estado dos times
+    // 🔹 3. Inicializar todos os times do dicionário
     const teams = {};
+    for (const [teamKey, teamName] of Object.entries(teamsDict)) {
+        teams[teamKey] = {
+            userSite: teamKey,
+            name: teamName,
+            problems: {},
+            solved: 0,
+            penalty: 0
+        };
+    }
 
+    // 🔹 4. Processar submissões
     for (const run of filtered) {
         const teamKey = run.teamName;
         const problem = run.problem;
         const time = run.time;
         const answer = run.answer;
 
-        // adiciona flag se essa submissão foi a primeira a resolver o problema
-        const firstToSolve =
-            answer === "YES" &&
-            firstSolveByProblem[problem]?.teamName === teamKey &&
-            firstSolveByProblem[problem]?.time === time;
-
-        // armazena essa informação na submissão filtrada
-        run.firstToSolve = firstToSolve;
-
+        // Se time novo aparecer (não listado no dict), adiciona
         if (!teams[teamKey]) {
-            teams[teamKey] = { name: teamKey, problems: {}, solved: 0, penalty: 0 };
+            teams[teamKey] = {
+                userSite: teamKey,
+                name: teamKey,
+                problems: {},
+                solved: 0,
+                penalty: 0
+            };
         }
 
         const team = teams[teamKey];
@@ -337,7 +356,18 @@ async function computeRankingAtTime(t) {
         }
 
         const p = team.problems[problem];
-        if (p.solved) continue; // ignora submissões após o AC
+
+        // Ignora submissões após o primeiro AC
+        if (p.solved) continue;
+
+        // Checa se esta submissão é o primeiro AC global do problema
+        const firstToSolve =
+            answer === "YES" &&
+            firstSolveByProblem[problem]?.teamName === teamKey &&
+            firstSolveByProblem[problem]?.time === time;
+
+        // Marca também dentro da submissão
+        run.firstToSolve = firstToSolve;
 
         if (answer === "NO") {
             p.tries++;
@@ -345,46 +375,47 @@ async function computeRankingAtTime(t) {
             p.tries++;
             p.time = time;
             p.solved = true;
-            p.firstToSolve = firstToSolve; // marca no problema do ranking
+            p.firstToSolve = firstToSolve;
 
             team.solved++;
             team.penalty += p.time + 20 * (p.tries - 1);
         }
     }
 
-    // 🔹 4. Montar o ranking ordenado
-    const ranking = Object.entries(teams)
-        .map(([teamKey, data]) => ({
-            userSite: teamKey,
-            name: teamsDict[data.name],
-            problems: data.problems,
-            solved: data.solved,
-            penalty: data.penalty
+    // 🔹 5. Gerar ranking completo
+    const ranking = Object.values(teams)
+        .map(team => ({
+            ...team,
+            pos: 0 // posição será definida após ordenar
         }))
         .sort((a, b) => {
             if (b.solved !== a.solved) return b.solved - a.solved;
             if (a.penalty !== b.penalty) return a.penalty - b.penalty;
             return a.userSite.localeCompare(b.userSite);
         })
-        .map((team, idx) => ({ pos: idx + 1, ...team }));
+        .map((team, idx) => ({ ...team, pos: idx + 1 }));
 
-    // 🔹 5. Retornar o estado completo
     return {
         time: t,
         ranking,
-        runs: filtered,        
+        runs: filtered
     };
 }
 
 
 async function scrapLetters() {
+
+    if (globalThis.letters.length > 0) {
+        return globalThis.letters;
+    } 
+
     const response = await fetchWithCookies('/judge/score.php');
     const html = await response.text();
 
     if (html.includes('Session expired') || html.includes('log in again')) {
         console.error('⚠️ Sessão expirou durante o scraping!');
         isLoggedIn = false;
-        globalCookies = '';
+        globalThis.globalCookies = '';
         return 'Session expired'
     }
 
@@ -400,13 +431,152 @@ async function scrapLetters() {
         return $(el).text().split(' ')[0];
     }).get();
 
-    const letters = headers.filter(h => /^[A-Z]$/.test(h));
+    globalThis.letters = headers.filter(h => /^[A-Z]$/.test(h));
 
     console.log("letras " + letters)
 
-    return letters;
+    return globalThis.letters;
 
 }
+
+
+
+
+async function computeRankingAtTimeWithPending(t, teamsDict) {
+
+    let runs = await scrapRuns();
+    
+    
+    if (runs === 'Session expired') {
+        await loga();
+        runs = await scrapRuns();
+        teamsDict = await getTeamsDict();
+    }
+
+    if (teamsDict == {}) {
+        teamsDict = await getTeamsDict();
+    }
+
+    // Clona e converte tempos para número
+    const allRuns = runs.map(r => ({ ...r, time: Number(r.time) }));
+
+    // 🔹 1. Filtra submissões até o tempo t (normais)
+    const filtered = allRuns
+        .filter(r => r.time <= t)
+        .sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
+
+    // 🔹 2. Simula submissões pendentes (1–4 minutos após t)
+    const pendingRuns = allRuns
+        .filter(r => {
+            return r.time > t && r.time <= t+1;
+        })
+        .map(r => ({
+            ...r,
+            pending: true,
+            status: "pending",
+            firstToSolve: false,
+            answer: null
+        }));
+
+    // 🔹 3. Identificar o primeiro AC global (apenas até t)
+    const firstSolveByProblem = {};
+    for (const run of filtered) {
+        if (run.answer === "YES" && !firstSolveByProblem[run.problem]) {
+            firstSolveByProblem[run.problem] = {
+                teamName: run.teamName,
+                time: run.time
+            };
+        }
+    }
+
+    // 🔹 4. Inicializar times
+    const teams = {};
+    for (const [teamKey, teamName] of Object.entries(teamsDict)) {
+        teams[teamKey] = {
+            userSite: teamKey,
+            name: teamName,
+            problems: {},
+            solved: 0,
+            penalty: 0
+        };
+    }
+
+    // 🔹 5. Processar submissões julgadas (até t)
+    for (const run of filtered) {
+        const { teamName: teamKey, problem, time, answer } = run;
+
+        if (!teams[teamKey]) {
+            teams[teamKey] = {
+                userSite: teamKey,
+                name: teamKey,
+                problems: {},
+                solved: 0,
+                penalty: 0
+            };
+        }
+
+        const team = teams[teamKey];
+        if (!team.problems[problem]) {
+            team.problems[problem] = {
+                tries: 0,
+                time: null,
+                solved: false,
+                firstToSolve: false
+            };
+        }
+
+        const p = team.problems[problem];
+        if (p.solved) continue;
+
+        const firstToSolve =
+            answer === "YES" &&
+            firstSolveByProblem[problem]?.teamName === teamKey &&
+            firstSolveByProblem[problem]?.time === time;
+
+        run.firstToSolve = firstToSolve;
+
+        if (answer === "NO") {
+            p.tries++;
+        } else if (answer === "YES") {
+            p.tries++;
+            p.time = time;
+            p.solved = true;
+            p.firstToSolve = firstToSolve;
+            team.solved++;
+            team.penalty += p.time + 20 * (p.tries - 1);
+        }
+    }
+
+    // 🔹 6. Montar ranking completo
+    const ranking = Object.values(teams)
+        .map(team => ({
+            ...team,
+            pos: 0
+        }))
+        .sort((a, b) => {
+            if (b.solved !== a.solved) return b.solved - a.solved;
+            if (a.penalty !== b.penalty) return a.penalty - b.penalty;
+            return a.userSite.localeCompare(b.userSite);
+        })
+        .map((team, idx) => ({ ...team, pos: idx + 1 }));
+
+    // 🔹 7. Combinar runs normais e pendentes
+    const combinedRuns = [...filtered, ...pendingRuns].sort(
+        (a, b) => a.time - b.time || a.runNumber - b.runNumber
+    );
+
+    // 🔹 8. Retornar resultado completo
+    return {
+        time: t,
+        ranking,
+        runs: combinedRuns
+         // útil para testes
+    };
+}
+
+
+
+
 
 
 async function scrap() {
@@ -421,7 +591,7 @@ async function scrap() {
     if (html.includes('Session expired') || html.includes('log in again')) {
         console.error('⚠️ Sessão expirou durante o scraping!');
         isLoggedIn = false;
-        globalCookies = '';
+        globalThis.globalCookies = '';
         return 'Session expired'
     }
 
@@ -515,7 +685,7 @@ export async function GET(request) {
             }
         } else if (mode === 'getStateByTime') {
             const time = Number(searchParams.get('time'));
-            data = await computeRankingAtTime(time);
+            data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict);
         } else if (mode === 'letters') {
             data = await scrapLetters();
             if (data === 'Session expired') {
@@ -530,7 +700,7 @@ export async function GET(request) {
         return Response.json({
             success: true,
             data: data,
-            cookies: globalCookies // Para debug
+            cookies: globalThis.globalCookies // Para debug
         });
     } catch (error) {
         console.error('\n❌ Erro na requisição:', error.message, '\n');
