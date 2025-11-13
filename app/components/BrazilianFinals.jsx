@@ -5,7 +5,7 @@ import { HelpCircle, X, CheckCircle } from 'lucide-react';
 import Balao from "./Balao"
 import BalaoEstrela from './BalaoEstrela'
 
-export default function BrazilianFinals({ initialScoreboard = [], initialSubmissions = [], teamsDict = {}, letters = [], START_TIME = "13:00:00", multiplo = 1 }) {
+export default function BrazilianFinals({ initialScoreboard = [], initialSubmissions = [], teamsDict = {}, letters = [] }) {
   const [time, setTime] = useState('1:00:00');
   const [scoreboard, setScoreboard] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -20,12 +20,14 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
   const [previousSubmissionsState, setPreviousSubmissionsState] = useState({});
   const [previousPositions, setPreviousPositions] = useState({});
   const [teamDistances, setTeamDistances] = useState({});
+  const tableRef = React.useRef(null);
+  const scrollTimeoutRef = React.useRef(null);
 
   const successEmotesList = ['🎉', '🔥', '⚡', '💪', '🚀', '⭐', '🏆', '👏', '💯', '✨'];
   const failEmotesList = ['😭', '😢', '😡', '😤', '😠', '💀', '😱', '😨', '🤬', '💔'];
 
   // coloque isso antes do useEffect do timer
-  //const START_TIME = "13:00:00"; // hora que será considerada como T=0
+  const START_TIME = "13:00:00"; // hora que será considerada como T=0
 
   function parseTimeToDate(timeString) {
     const [h, m, s] = timeString.split(":").map(Number);
@@ -174,6 +176,61 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
     }
   }, [initialSubmissions]);
 
+  // Scroll automático para acompanhar submissões
+  useEffect(() => {
+    if (scoreboard.length === 0 || !tableRef.current) return;
+
+    // Cancela scroll anterior se houver
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Aguarda animações de mudança de posição terminarem (1.5s de margem)
+    scrollTimeoutRef.current = setTimeout(() => {
+      // Encontra o time com menor posição que tem submissão pendente
+      let teamToScroll = null;
+      let minPosition = Infinity;
+
+      scoreboard.forEach(team => {
+        const hasPending = team.pendingCount > 0;
+        if (hasPending && team.pos < minPosition) {
+          minPosition = team.pos;
+          teamToScroll = team;
+        }
+      });
+
+      // Se não há submissões pendentes, volta para o topo
+      if (!teamToScroll) {
+        tableRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      // Rola até o time com submissão pendente
+      const teamRow = tableRef.current.querySelector(`tr[data-team-id="${teamToScroll.id}"]`);
+      if (teamRow) {
+        const tableRect = tableRef.current.getBoundingClientRect();
+        const rowRect = teamRow.getBoundingClientRect();
+        const rowTop = rowRect.top - tableRect.top + tableRef.current.scrollTop;
+        const rowBottom = rowTop + rowRect.height;
+        const visibleTop = tableRef.current.scrollTop;
+        const visibleBottom = visibleTop + tableRef.current.clientHeight;
+
+        // Só rola se o time não estiver visível
+        if (rowTop < visibleTop || rowBottom > visibleBottom) {
+          // Centraliza o time na tela
+          const scrollTo = rowTop - (tableRef.current.clientHeight / 2) + (rowRect.height / 2);
+          tableRef.current.scrollTo({ top: Math.max(0, scrollTo), behavior: 'smooth' });
+        }
+      }
+    }, 1500); // Aguarda 1.5s após mudanças no scoreboard
+
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [scoreboard, pendingSubmissions]);
+
   // Detecta mudanças de posição no ranking
   useEffect(() => {
     if (scoreboard.length > 0) {
@@ -225,7 +282,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
 
     const timer = setInterval(() => {
       const now = new Date();
-      const diff = (now - start)*multiplo; // diferença em ms
+      const diff = now - start; // diferença em ms
 
       if (diff < 0) {
         // se ainda não chegou na hora inicial
@@ -398,6 +455,16 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
+      <style jsx>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
+      
       <h1 className="text-blue-400 text-xl mb-4 underline">Brazilian Finals</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -450,7 +517,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
           <div className="bg-gray-800 border-2 border-white rounded-lg overflow-hidden">
 
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(115vh-8rem)] scrollbar-hide" ref={tableRef}>
               <table className="w-full text-sm border-collapse table-fixed">
                 <thead>
                   <tr className="bg-gray-700 border-b-2 border-white">
@@ -474,11 +541,12 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                   <AnimatePresence mode="popLayout">
                     {scoreboard.map((team) => {
                       const distance = teamDistances[team.id] || 1;
-                      const duration = Math.min(1 + (distance * 0.3), 3); // Velocidade constante, máximo 1.2s
+                      const duration = Math.min(0.15 + (distance * 0.15), 1.2); // Velocidade constante, máximo 1.2s
                       
                       return (
                       <motion.tr
                         key={team.id}
+                        data-team-id={team.id}
                         layout="position"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}

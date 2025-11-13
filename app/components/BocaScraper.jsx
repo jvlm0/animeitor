@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import BrazilianFinals from "./BrazilianFinals"
 
-export default function BocaScraper({ teamsDict = {}, letters = [] }) {
+export default function BocaScraper({ teamsDict = {}, letters = [], contestInfo = {contestName: "Maratona PPCI", startTime: "13:00:00"} }) {
   const [scoreData, setScoreData] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [error, setError] = useState('');
@@ -33,7 +33,7 @@ export default function BocaScraper({ teamsDict = {}, letters = [] }) {
     return diffMin*multiplo;
   }
 
-  const tempoDeInicio = '01:47:00';
+  const tempoDeInicio = contestInfo.startTime;
 
   const handleScrapeScore = useCallback(async () => {
     setError('');
