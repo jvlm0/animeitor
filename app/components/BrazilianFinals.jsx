@@ -5,7 +5,7 @@ import { HelpCircle, X, CheckCircle } from 'lucide-react';
 import Balao from "./Balao"
 import BalaoEstrela from './BalaoEstrela'
 
-export default function BrazilianFinals({ initialScoreboard = [], initialSubmissions = [], teamsDict = {}, letters = [], START_TIME = "13:00:00" }) {
+export default function BrazilianFinals({ initialScoreboard = [], initialSubmissions = [], teamsDict = {}, letters = [], START_TIME = "13:00:00", multiplo = 1 }) {
   const [time, setTime] = useState('1:00:00');
   const [scoreboard, setScoreboard] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -19,6 +19,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
   const [teamFailEmotes, setTeamFailEmotes] = useState({});
   const [previousSubmissionsState, setPreviousSubmissionsState] = useState({});
   const [previousPositions, setPreviousPositions] = useState({});
+  const [teamDistances, setTeamDistances] = useState({});
 
   const successEmotesList = ['🎉', '🔥', '⚡', '💪', '🚀', '⭐', '🏆', '👏', '💯', '✨'];
   const failEmotesList = ['😭', '😢', '😡', '😤', '😠', '💀', '😱', '😨', '🤬', '💔'];
@@ -38,6 +39,21 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
     if (initialScoreboard.length > 0) {
       const formattedScoreboard = initialScoreboard.map((team, index) => {
         const teamName = team.userSite.split('/')[0];
+        
+        // Calcula submissões pendentes e total de tentativas
+        let pendingCount = 0;
+        let totalTries = 0;
+        
+        if (team.problems) {
+          Object.values(team.problems).forEach(problem => {
+            if (problem) {
+              if (problem.tries !== null) {
+                totalTries += problem.tries;
+              }
+            }
+          });
+        }
+        
         return {
           id: teamName,
           pos: team.pos,
@@ -46,9 +62,12 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
           teamName: teamName,
           solved: team.solved,
           penalty: team.penalty,
-          problems: team.problems
+          problems: team.problems,
+          pendingCount: 0, // Será atualizado pelo useEffect de submissões
+          totalTries: totalTries
         };
       });
+      
       setScoreboard(formattedScoreboard);
 
       // Extrai as letras dos problemas dinamicamente
@@ -62,7 +81,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
   // Processa as últimas submissões e detecta pendentes
   useEffect(() => {
     if (initialSubmissions.length > 0) {
-      const recentSubmissions = initialSubmissions.reverse().slice(0, 40).map(sub => ({
+      const recentSubmissions = initialSubmissions.reverse().slice(0, 20).map(sub => ({
         time: sub.time,
         team: sub.teamName,
         problem: sub.problem,
@@ -77,6 +96,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
       // Detecta submissões pendentes e mudanças de estado
       const newPendingSubmissions = {};
       const newSubmissionResults = {};
+      const teamPendingCounts = {};
 
       initialSubmissions.forEach(sub => {
         const key = `${sub.teamName}-${sub.problem}`;
@@ -89,6 +109,9 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
         if (isPending) {
           // Submissão está pendente
           newPendingSubmissions[key] = true;
+          
+          // Conta pendentes por time
+          teamPendingCounts[sub.teamName] = (teamPendingCounts[sub.teamName] || 0) + 1;
         } else {
           // Submissão foi julgada
           // Só mostra o resultado animado se o estado mudou de pendente para julgado
@@ -111,6 +134,33 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
       setPendingSubmissions(newPendingSubmissions);
       setSubmissionResults(prev => ({ ...prev, ...newSubmissionResults }));
 
+      // Atualiza contagem de pendentes no scoreboard e reordena
+      setScoreboard(prevScoreboard => {
+        const updatedScoreboard = prevScoreboard.map(team => ({
+          ...team,
+          pendingCount: teamPendingCounts[team.teamName] || 0
+        }));
+
+        // Reordena o scoreboard
+        // 1º: Mais problemas resolvidos (maior)
+        // 2º: Menor penalidade
+        // 3º: Mais submissões pendentes (maior)
+        // 4º: Menos tentativas totais (menor)
+        const sorted = [...updatedScoreboard].sort((a, b) => {
+          if (b.solved !== a.solved) return b.solved - a.solved;
+          if (a.penalty !== b.penalty) return a.penalty - b.penalty;
+          if (b.pendingCount !== a.pendingCount) return b.pendingCount - a.pendingCount;
+          return a.totalTries - b.totalTries;
+        });
+
+        // Atualiza as posições
+        sorted.forEach((team, index) => {
+          team.pos = index + 1;
+        });
+
+        return sorted;
+      });
+
       // Salva o estado atual para comparação futura
       const newState = {};
       initialSubmissions.forEach(sub => {
@@ -129,11 +179,15 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
     if (scoreboard.length > 0) {
       const goingUp = [];
       const goingDown = [];
+      const distances = {};
 
       scoreboard.forEach(team => {
         const previousPos = previousPositions[team.id];
         
         if (previousPos !== undefined && previousPos !== team.pos) {
+          const distance = Math.abs(team.pos - previousPos);
+          distances[team.id] = distance;
+          
           if (team.pos < previousPos) {
             // Posição diminuiu = subiu no ranking
             goingUp.push(team.id);
@@ -147,11 +201,13 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
       if (goingUp.length > 0 || goingDown.length > 0) {
         setTeamsGoingUp(goingUp);
         setTeamsGoingDown(goingDown);
+        setTeamDistances(distances);
 
         // Remove as animações após 2 segundos
         setTimeout(() => {
           setTeamsGoingUp([]);
           setTeamsGoingDown([]);
+          setTeamDistances({});
         }, 2000);
       }
 
@@ -169,7 +225,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
 
     const timer = setInterval(() => {
       const now = new Date();
-      const diff = now - start; // diferença em ms
+      const diff = (now - start)*multiplo; // diferença em ms
 
       if (diff < 0) {
         // se ainda não chegou na hora inicial
@@ -416,7 +472,11 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                 </thead>
                 <tbody className="divide-y divide-gray-700">
                   <AnimatePresence mode="popLayout">
-                    {scoreboard.map((team) => (
+                    {scoreboard.map((team) => {
+                      const distance = teamDistances[team.id] || 1;
+                      const duration = Math.min(1 + (distance * 0.3), 3); // Velocidade constante, máximo 1.2s
+                      
+                      return (
                       <motion.tr
                         key={team.id}
                         layout="position"
@@ -424,7 +484,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{
-                          layout: { duration: 0.6, ease: "easeInOut" },
+                          layout: { duration: duration, ease: "easeInOut" },
                           opacity: { duration: 0.3 }
                         }}
                         className="hover:bg-gray-700 relative"
@@ -524,7 +584,8 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                           renderProblemCell(team, letter, index === letters.length - 1)
                         )}
                       </motion.tr>
-                    ))}
+                    );
+                    })}
                   </AnimatePresence>
                 </tbody>
               </table>
