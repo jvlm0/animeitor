@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import BrazilianFinals from "./BrazilianFinals"
 
-export default function BocaScraper({ teamsDict = {}, letters = [], contestInfo = {contestName: "Maratona PPCI", startTime: "13:00:00"} }) {
+export default function BocaScraper({ teamsDict = {}, letters = [], contestTime = "", contestName = "" }) {
   const [scoreData, setScoreData] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [error, setError] = useState('');
@@ -33,7 +33,6 @@ export default function BocaScraper({ teamsDict = {}, letters = [], contestInfo 
     return diffMin*multiplo;
   }
 
-  const tempoDeInicio = contestInfo.startTime;
 
   const handleScrapeScore = useCallback(async () => {
     setError('');
@@ -55,9 +54,9 @@ export default function BocaScraper({ teamsDict = {}, letters = [], contestInfo 
 
   const handleScrapeByTime = useCallback(async () => {
     setError('');
-    console.log("BOCA SCRAPPEER"+letters)
+    console.log(contestTime);
     try {
-      const response = await fetch('api/boca-scraper?mode=getStateByTime&time=' + minutosDesde(tempoDeInicio));
+      const response = await fetch('api/boca-scraper?mode=getStateByTime&time=' + minutosDesde(contestTime));
       const data = await response.json();
 
       if (data.success) {
@@ -114,8 +113,10 @@ export default function BocaScraper({ teamsDict = {}, letters = [], contestInfo 
         initialSubmissions={submissions}
         teamsDict={teamsDict}
         letters={letters}
-        START_TIME={tempoDeInicio}
+        START_TIME={contestTime}
         multiplo = {multiplo}
+        contestName = {contestName}
+        enableGifs = {true}
       />
     </>
   );

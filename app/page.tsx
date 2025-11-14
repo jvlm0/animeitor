@@ -5,15 +5,19 @@ import BocaScraper from "./components/BocaScraper";
 export default function Home() {
   const [teams, setTeams] = useState(null);
   const [letters, setLetters] = useState([]);
-  const [contestInfo, setContestInfo] = useState({
-    contestName: "",
-    startTime: "",
-  });
+  const [contestTime, setContestTime] = useState('');
+  const [contestInfo, setContestInfo] = useState({startTime: "", contestName: ""});
+
+
 
   useEffect(() => {
-    fetch('/api/boca-scraper?mode=teamsDict')
+    fetch('/api/contest')
       .then(res => res.json())
-      .then(data => setTeams(data.data));
+      .then(data => {
+        console.log('📦 Dados recebidos de /api/contest:', data.data.startTime);
+        setContestInfo(data.data);
+      })
+      .catch(err => console.error('❌ Erro ao buscar letters:', err));
   }, []);
 
   useEffect(() => {
@@ -26,19 +30,15 @@ export default function Home() {
       .catch(err => console.error('❌ Erro ao buscar letters:', err));
   }, []);
 
-
-    useEffect(() => {
-    fetch('/api/contest')
+  useEffect(() => {
+    fetch('/api/boca-scraper?mode=teamsDict')
       .then(res => res.json())
-      .then(data => {
-        //console.log('📦 Dados recebidos de /api/boca-scraper?mode=letters:', data);
-        setContestInfo(data.data);
-      })
-      .catch(err => console.error('❌ Erro ao buscar letters:', err));
+      .then(data => setTeams(data.data));
   }, []);
 
 
   if (!teams) return <p>Carregando...</p>;
 
-  return <BocaScraper teamsDict={teams} letters={letters} contestInfo = {contestInfo} />;
+  return <BocaScraper teamsDict={teams} letters={letters}
+    contestTime={contestInfo.startTime} contestName={contestInfo.contestName}/>;
 }

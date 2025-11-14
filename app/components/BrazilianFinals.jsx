@@ -4,8 +4,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { HelpCircle, X, CheckCircle } from 'lucide-react';
 import Balao from "./Balao"
 import BalaoEstrela from './BalaoEstrela'
+import {FailGifs}  from './FailGifs'
+import {SuccessGifs} from './SuccessGifs'
 
-export default function BrazilianFinals({ initialScoreboard = [], initialSubmissions = [], teamsDict = {}, letters = [] }) {
+export default function BrazilianFinals({ initialScoreboard = [],
+                                          initialSubmissions = [],
+                                          teamsDict = {},
+                                          letters = [], 
+                                          enableGifs = true, 
+                                          START_TIME = "13:00:00", 
+                                          multiplo = 1, 
+                                          contestName="" }) {
+                                            
   const [time, setTime] = useState('1:00:00');
   const [scoreboard, setScoreboard] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -27,7 +37,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
   const failEmotesList = ['😭', '😢', '😡', '😤', '😠', '💀', '😱', '😨', '🤬', '💔'];
 
   // coloque isso antes do useEffect do timer
-  const START_TIME = "13:00:00"; // hora que será considerada como T=0
+  //const START_TIME = "13:00:00"; // hora que será considerada como T=0
 
   function parseTimeToDate(timeString) {
     const [h, m, s] = timeString.split(":").map(Number);
@@ -42,16 +52,14 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
       const formattedScoreboard = initialScoreboard.map((team, index) => {
         const teamName = team.userSite.split('/')[0];
         
-        // Calcula submissões pendentes e total de tentativas
-        let pendingCount = 0;
-        let totalTries = 0;
+        // Calcula apenas tentativas de problemas NÃO resolvidos
+        let wrongTries = 0;
         
         if (team.problems) {
           Object.values(team.problems).forEach(problem => {
-            if (problem) {
-              if (problem.tries !== null) {
-                totalTries += problem.tries;
-              }
+            if (problem && problem.tries !== null && problem.time === null) {
+              // Problema tem tentativas mas não foi resolvido (tempo é null)
+              wrongTries += problem.tries;
             }
           });
         }
@@ -66,7 +74,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
           penalty: team.penalty,
           problems: team.problems,
           pendingCount: 0, // Será atualizado pelo useEffect de submissões
-          totalTries: totalTries
+          wrongTries: wrongTries // Apenas tentativas erradas
         };
       });
       
@@ -120,6 +128,33 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
           if (previousState && previousState.isPending && !isPending) {
             newSubmissionResults[key] = currentAnswer === 'YES' ? 'accepted' : 'rejected';
             
+            // Adiciona GIF de sucesso ou falha (se habilitado)
+            if (enableGifs) {
+              if (currentAnswer === 'YES') {
+                const randomGif = SuccessGifs[Math.floor(Math.random() * SuccessGifs.length)];
+                setTeamEmotes(prev => ({ ...prev, [sub.teamName]: randomGif }));
+                
+                setTimeout(() => {
+                  setTeamEmotes(prev => {
+                    const updated = { ...prev };
+                    delete updated[sub.teamName];
+                    return updated;
+                  });
+                }, 3000);
+              } else {
+                const randomGif = FailGifs[Math.floor(Math.random() * FailGifs.length)];
+                setTeamFailEmotes(prev => ({ ...prev, [sub.teamName]: randomGif }));
+                
+                setTimeout(() => {
+                  setTeamFailEmotes(prev => {
+                    const updated = { ...prev };
+                    delete updated[sub.teamName];
+                    return updated;
+                  });
+                }, 3000);
+              }
+            }
+            
             // Remove o resultado após 2 segundos
             setTimeout(() => {
               setSubmissionResults(prev => {
@@ -138,21 +173,34 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
 
       // Atualiza contagem de pendentes no scoreboard e reordena
       setScoreboard(prevScoreboard => {
-        const updatedScoreboard = prevScoreboard.map(team => ({
-          ...team,
-          pendingCount: teamPendingCounts[team.teamName] || 0
-        }));
+        const updatedScoreboard = prevScoreboard.map(team => {
+          // Recalcula tentativas erradas (problemas não resolvidos)
+          let wrongTries = 0;
+          if (team.problems) {
+            Object.values(team.problems).forEach(problem => {
+              if (problem && problem.tries !== null && problem.time === null) {
+                wrongTries += problem.tries;
+              }
+            });
+          }
+          
+          return {
+            ...team,
+            pendingCount: teamPendingCounts[team.teamName] || 0,
+            wrongTries: wrongTries
+          };
+        });
 
         // Reordena o scoreboard
         // 1º: Mais problemas resolvidos (maior)
-        // 2º: Menor penalidade
+        // 2º: Menor penalidade (tempo total dos resolvidos)
         // 3º: Mais submissões pendentes (maior)
-        // 4º: Menos tentativas totais (menor)
+        // 4º: Menos tentativas erradas (menor) - apenas problemas NÃO resolvidos
         const sorted = [...updatedScoreboard].sort((a, b) => {
           if (b.solved !== a.solved) return b.solved - a.solved;
           if (a.penalty !== b.penalty) return a.penalty - b.penalty;
           if (b.pendingCount !== a.pendingCount) return b.pendingCount - a.pendingCount;
-          return a.totalTries - b.totalTries;
+          return a.wrongTries - b.wrongTries;
         });
 
         // Atualiza as posições
@@ -282,7 +330,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
 
     const timer = setInterval(() => {
       const now = new Date();
-      const diff = now - start; // diferença em ms
+      const diff = (now - start)*multiplo; // diferença em ms
 
       if (diff < 0) {
         // se ainda não chegou na hora inicial
@@ -465,7 +513,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
         }
       `}</style>
       
-      <h1 className="text-blue-400 text-xl mb-4 underline">Brazilian Finals</h1>
+      <h1 className="text-blue-400 text-xl mb-4 underline">{contestName}</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div className="space-y-2">
@@ -517,7 +565,7 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
           <div className="bg-gray-800 border-2 border-white rounded-lg overflow-hidden">
 
 
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(115vh-8rem)] scrollbar-hide" ref={tableRef}>
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(120vh-8rem)] scrollbar-hide" ref={tableRef}>
               <table className="w-full text-sm border-collapse table-fixed">
                 <thead>
                   <tr className="bg-gray-700 border-b-2 border-white">
@@ -589,21 +637,23 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
 
                           {teamEmotes[team.id] && (
                             <motion.div
-                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-gray-900 rounded p-1 border-2 border-green-400 shadow-lg z-10"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-gray-900 rounded-lg p-1 border-2 border-green-400 shadow-lg z-10 overflow-hidden"
                               initial={{ scale: 0, rotate: -180, opacity: 0 }}
                               animate={{ scale: 1, rotate: 0, opacity: 1 }}
                               exit={{ scale: 0, rotate: 180, opacity: 0 }}
                               transition={{ type: "spring", duration: 0.6 }}
                             >
-                              <div className="text-2xl">
-                                {teamEmotes[team.id]}
-                              </div>
+                              <img 
+                                src={teamEmotes[team.id]} 
+                                alt="Success" 
+                                className="w-16 h-16 object-cover rounded"
+                              />
                             </motion.div>
                           )}
 
                           {teamFailEmotes[team.id] && (
                             <motion.div
-                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-gray-900 rounded p-1 border-2 border-red-400 shadow-lg z-10"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-gray-900 rounded-lg p-1 border-2 border-red-400 shadow-lg z-10 overflow-hidden"
                               initial={{ scale: 0, y: 20, opacity: 0 }}
                               animate={{
                                 scale: [1, 1.2, 1],
@@ -618,9 +668,11 @@ export default function BrazilianFinals({ initialScoreboard = [], initialSubmiss
                                 default: { duration: 0.4 }
                               }}
                             >
-                              <div className="text-2xl">
-                                {teamFailEmotes[team.id]}
-                              </div>
+                              <img 
+                                src={teamFailEmotes[team.id]} 
+                                alt="Fail" 
+                                className="w-16 h-16 object-cover rounded"
+                              />
                             </motion.div>
                           )}
                         </motion.td>
