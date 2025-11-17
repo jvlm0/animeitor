@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HelpCircle, X, CheckCircle } from 'lucide-react';
 import Balao from "./Balao"
@@ -20,7 +20,8 @@ export default function BrazilianFinals({ initialScoreboard = [],
                                           enableGifs = true, 
                                           START_TIME = "13:00:00", 
                                           multiplo = 1, 
-                                          contestName="" }) {
+                                          contestName="",
+                                        }) {
                                             
   const [scoreboard, setScoreboard] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -37,6 +38,10 @@ export default function BrazilianFinals({ initialScoreboard = [],
   const [teamDistances, setTeamDistances] = useState({});
   const tableRef = React.useRef(null);
   const scrollTimeoutRef = React.useRef(null);
+  
+  // Ref para rastrear submissões já processadas (evita re-animações)
+  const processedSubmissionsRef = useRef(new Set());
+  const isFirstLoadRef = useRef(true);
 
 
   // Inicializa o scoreboard com IDs únicos
@@ -84,6 +89,20 @@ export default function BrazilianFinals({ initialScoreboard = [],
   // Processa as últimas submissões e detecta pendentes
   useEffect(() => {
     if (initialSubmissions.length > 0) {
+      // Na primeira carga, marca todas as submissões existentes como já processadas
+      if (isFirstLoadRef.current) {
+        initialSubmissions.forEach(sub => {
+          const isPending = !sub.answer || sub.answer === '?' || sub.answer === 'PENDING';
+          // Só marca como processada se NÃO estiver pendente
+          if (!isPending) {
+            const key = `${sub.teamName}-${sub.problem}`;
+            const submissionId = `${key}-${sub.time}-${sub.answer}`;
+            processedSubmissionsRef.current.add(submissionId);
+          }
+        });
+        isFirstLoadRef.current = false;
+      }
+      
       const recentSubmissions = initialSubmissions.reverse().slice(0, 20).map(sub => ({
         time: sub.time,
         team: sub.teamName,
@@ -109,6 +128,9 @@ export default function BrazilianFinals({ initialScoreboard = [],
         const isPending = !sub.answer || sub.answer === '?' || sub.answer === 'PENDING';
         const currentAnswer = sub.answer;
         
+        // Cria um identificador único para esta submissão específica
+        const submissionId = `${key}-${sub.time}-${currentAnswer}`;
+        
         if (isPending) {
           // Submissão está pendente
           newPendingSubmissions[key] = true;
@@ -117,31 +139,47 @@ export default function BrazilianFinals({ initialScoreboard = [],
           teamPendingCounts[sub.teamName] = (teamPendingCounts[sub.teamName] || 0) + 1;
         } else {
           // Submissão foi julgada
-          // Só mostra o resultado animado se o estado mudou de pendente para julgado
-          if (previousState && previousState.isPending && !isPending) {
+          
+          // Determina se deve animar:
+          // 1. Mudou de pendente para julgado OU
+          // 2. É uma nova submissão julgada que nunca vimos antes
+          const changedFromPending = previousState && previousState.isPending && !isPending;
+          const isNewJudgedSubmission = !processedSubmissionsRef.current.has(submissionId);
+          
+          const shouldAnimate = changedFromPending || isNewJudgedSubmission;
+          
+          if (shouldAnimate) {
+            // Marca como processada
+            processedSubmissionsRef.current.add(submissionId);
+            
             newSubmissionResults[key] = currentAnswer === 'YES' ? 'accepted' : 'rejected';
             
             // Adiciona GIF de sucesso ou falha (se habilitado)
             if (enableGifs) {
+              const teamKey = sub.teamName;
               if (currentAnswer === 'YES') {
                 const randomGif = SuccessGifs[Math.floor(Math.random() * SuccessGifs.length)];
-                setTeamEmotes(prev => ({ ...prev, [sub.teamName]: randomGif }));
+                setTeamEmotes(prev => ({ ...prev, [teamKey]: randomGif }));
                 
                 setTimeout(() => {
                   setTeamEmotes(prev => {
                     const updated = { ...prev };
-                    delete updated[sub.teamName];
+                    if (updated[teamKey] === randomGif) {
+                      delete updated[teamKey];
+                    }
                     return updated;
                   });
                 }, 3000);
               } else {
                 const randomGif = FailGifs[Math.floor(Math.random() * FailGifs.length)];
-                setTeamFailEmotes(prev => ({ ...prev, [sub.teamName]: randomGif }));
+                setTeamFailEmotes(prev => ({ ...prev, [teamKey]: randomGif }));
                 
                 setTimeout(() => {
                   setTeamFailEmotes(prev => {
                     const updated = { ...prev };
-                    delete updated[sub.teamName];
+                    if (updated[teamKey] === randomGif) {
+                      delete updated[teamKey];
+                    }
                     return updated;
                   });
                 }, 3000);
@@ -215,7 +253,7 @@ export default function BrazilianFinals({ initialScoreboard = [],
       });
       setPreviousSubmissionsState(newState);
     }
-  }, [initialSubmissions]);
+  }, [initialSubmissions, enableGifs]);
 
   // Scroll automático para acompanhar submissões
   useEffect(() => {

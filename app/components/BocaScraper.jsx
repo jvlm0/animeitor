@@ -10,6 +10,7 @@ export default function BocaScraper({ teamsDict = {},
                                       multiplo = 1 }) {
   const [scoreData, setScoreData] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [time, setTime] = useState(0);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -64,6 +65,7 @@ export default function BocaScraper({ teamsDict = {},
       if (data.success) {
         setScoreData(data.data.ranking);
         setSubmissions(data.data.runs);
+        setTime(data.data.time);
       }
     } catch (err) {
       setError('Erro ao buscar dados de score: ' + err.message);
@@ -118,7 +120,8 @@ export default function BocaScraper({ teamsDict = {},
         START_TIME={contestTime}
         multiplo = {multiplo}
         contestName = {contestName}
-        enableGifs = {false}
+        enableGifs = {true}
+        //timeLastUpdate = {time}
       />
     </>
   );
