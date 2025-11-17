@@ -121,7 +121,7 @@ export default function BocaScraper({ teamsDict = {},
         multiplo = {multiplo}
         contestName = {contestName}
         enableGifs = {true}
-        //timeLastUpdate = {time}
+        timeLastUpdate = {time}
       />
     </>
   );
