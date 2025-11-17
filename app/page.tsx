@@ -6,7 +6,7 @@ export default function Home() {
   const [teams, setTeams] = useState(null);
   const [letters, setLetters] = useState([]);
   const [contestTime, setContestTime] = useState('');
-  const [contestInfo, setContestInfo] = useState({startTime: "", contestName: ""});
+  const [contestInfo, setContestInfo] = useState({ startTime: "", contestName: "", multiplo: 1 });
 
 
 
@@ -24,7 +24,7 @@ export default function Home() {
     fetch('/api/boca-scraper?mode=letters')
       .then(res => res.json())
       .then(data => {
-        //console.log('📦 Dados recebidos de /api/boca-scraper?mode=letters:', data);
+        console.log('📦 Dados recebidos de /api/boca-scraper?mode=letters:', data);
         setLetters(data.data);
       })
       .catch(err => console.error('❌ Erro ao buscar letters:', err));
@@ -40,5 +40,5 @@ export default function Home() {
   if (!teams) return <p>Carregando...</p>;
 
   return <BocaScraper teamsDict={teams} letters={letters}
-    contestTime={contestInfo.startTime} contestName={contestInfo.contestName}/>;
+    contestTime={contestInfo.startTime} contestName={contestInfo.contestName} multiplo={contestInfo.multiplo} />;
 }

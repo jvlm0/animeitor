@@ -3,13 +3,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import BrazilianFinals from "./BrazilianFinals"
 
-export default function BocaScraper({ teamsDict = {}, letters = [], contestTime = "", contestName = "" }) {
+export default function BocaScraper({ teamsDict = {}, 
+                                      letters = [], 
+                                      contestTime = "", 
+                                      contestName = "", 
+                                      multiplo = 1 }) {
   const [scoreData, setScoreData] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  const multiplo = 10;
 
   // Intervalo em milissegundos (30 segundos)
   const REFRESH_INTERVAL = 2000;
@@ -56,7 +58,7 @@ export default function BocaScraper({ teamsDict = {}, letters = [], contestTime 
     setError('');
     console.log(contestTime);
     try {
-      const response = await fetch('api/boca-scraper?mode=getStateByTime&time=' + minutosDesde(contestTime));
+      const response = await fetch('api/boca-scraper?mode=getStateByTime');
       const data = await response.json();
 
       if (data.success) {
@@ -116,7 +118,7 @@ export default function BocaScraper({ teamsDict = {}, letters = [], contestTime 
         START_TIME={contestTime}
         multiplo = {multiplo}
         contestName = {contestName}
-        enableGifs = {true}
+        enableGifs = {false}
       />
     </>
   );

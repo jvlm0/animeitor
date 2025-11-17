@@ -1,35 +1,5 @@
-globalThis.startTime = "13:00:00";
-globalThis.contestName = "Maratona PPCI";
-globalThis.simulate = false;
-globalThis.multiplo = 1;
+import { getContestInfo, setContestInfo } from "../../contest/contestInfo";
 
-
-function getContestInfo() {
-    return {
-        contestName: globalThis.contestName,
-        startTime: globalThis.startTime,
-        simulate: globalThis.simulate = false,
-        multiplo: globalThis.multiplo = 1
-    }
-}
-
-
-function setContestInfo(contest) {
-
-    if (contest?.startTime) {
-        globalThis.startTime = contest?.startTime;
-    }
-    if (contest?.contestName) {
-        globalThis.contestName = contest?.contestName;
-    }
-    if (contest?.simulate) {
-        globalThis.simulate = contest?.simulate;
-    }
-    if (contest?.multiplo) {
-        globalThis.multiplo = contest?.multiplo;
-    }    
-    return 'Contest Atualizado';
-}
 
 
 export async function GET() {
