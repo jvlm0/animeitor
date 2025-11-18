@@ -1,33 +1,31 @@
 import { getContestInfo } from "../contest/contestInfo";
 import { computeRankingAtTimeWithPending } from "./lib";
+import { saveContest } from "./saveContest";
 
 console.log("🔌 Módulo carregado!");
 
 
-let cache = {
-  updatedAt: null,
-  data: null,
-};
+let cache = null;
 
 let isJobStarted = false;
 
 function minutosDesde(horario, multiplo) {
-    // Divide "13:00" em [13, 00]
-    const [horas, minutos] = horario.split(":").map(Number);
+  // Divide "13:00" em [13, 00]
+  const [horas, minutos] = horario.split(":").map(Number);
 
-    // Cria um objeto Date para o horário de referência (hoje)
-    const agora = new Date();
-    const referencia = new Date();
-    referencia.setHours(horas, minutos, 0, 0);
+  // Cria um objeto Date para o horário de referência (hoje)
+  const agora = new Date();
+  const referencia = new Date();
+  referencia.setHours(horas, minutos, 0, 0);
 
-    // Calcula a diferença em milissegundos
-    const diffMs = agora - referencia;
+  // Calcula a diferença em milissegundos
+  const diffMs = agora - referencia;
 
-    // Converte para minutos
-    const diffMin = diffMs / 1000 / 60;
+  // Converte para minutos
+  const diffMin = diffMs / 1000 / 60;
 
-    // Retorna diferença em minutos (pode ser negativa se ainda não chegou o horário)
-    return diffMin*multiplo;
+  // Retorna diferença em minutos (pode ser negativa se ainda não chegou o horário)
+  return diffMin * multiplo;
 }
 
 
@@ -40,11 +38,15 @@ async function runScraper() {
 
 
   const time = minutosDesde(contestInfo.startTime, contestInfo.multiplo);
-  const data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict);
 
-  cache =  data;
+  //console.log("condição "+(time <= 300 || cache == null));
+  if (time <= 300 || cache == null) {
+    const data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict);
+    cache = data;
+    //saveContest(contestInfo.contestName, data);
+    console.log("[JOB] Cache atualizado!");
+  }
 
-  console.log("[JOB] Cache atualizado!");
 }
 
 // Inicia o job apenas uma vez
@@ -56,7 +58,7 @@ export function startScraperJob() {
   // Executa 1x ao iniciar
   runScraper();
 
-  // Executa a cada 30 segundos (exemplo)
+  
   setInterval(runScraper, 2 * 1000);
 
   isJobStarted = true;

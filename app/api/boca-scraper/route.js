@@ -6,7 +6,7 @@ import {loga,
         computeRankingAtTimeWithPending, 
         scrapLetters} from '../../lib/lib'
 import { getCache, startScraperJob } from '../../lib/scrapJob';
-
+import {releaseOneProblemFreeze} from '../../lib/realeseProblem';
 
 startScraperJob();
 // ===== ROUTE HANDLERS =====
@@ -62,6 +62,11 @@ export async function GET(request) {
                 await loga();
                 data = await scrapLetters();
             }
+        } else if (mode === 'releaseOneProblem') {
+            const ranking = getCache().ranking;
+            const runs = getCache().runs;
+
+            releaseOneProblemFreeze(ranking, runs);
         }
 
 
