@@ -2,6 +2,7 @@
 "use client"
 import React from 'react';
 import { motion } from 'framer-motion';
+import Image from 'next/image'
 
 /**
  * Célula que exibe o nome do time

@@ -1,3 +1,5 @@
+// /api/contest
+
 import { getContestInfo, setContestInfo } from "../../contest/contestInfo";
 
 

@@ -50,7 +50,7 @@ export default function ProblemCell({
 
             {/* Problema Errado */}
             {display.type === 'wrong' && !isPending && !hasFreeze && (
-                <WrongProblemDisplay tries={display.tries} />
+                <WrongProblemDisplay tries={display.tries-1} />
             )}
 
             {/* Problema Não Tentado */}
@@ -96,7 +96,9 @@ function WrongProblemDisplay({ tries }) {
     return (
         <div className="flex flex-col items-center justify-center h-full">
             <X className="w-8 h-8 text-red-500 stroke-[3] mb-1" />
-            <div className="text-red-400 font-bold text-sm">{tries}</div>
+            {tries > 0 && (
+                <div className="text-red-400 font-bold text-sm">{tries}</div>
+            )}
         </div>
     );
 }

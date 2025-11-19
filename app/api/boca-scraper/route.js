@@ -5,10 +5,10 @@ import {loga,
         getTeamsDict,
         computeRankingAtTimeWithPending, 
         scrapLetters} from '../../lib/lib'
-import { getCache, setCache, startScraperJob } from '../../lib/scrapJob';
+import { getCache, setCache, startScraperJob, stopJob } from '../../lib/scrapJob';
 import {releaseOneProblemFreeze} from '../../lib/realeseProblem';
 
-startScraperJob();
+
 // ===== ROUTE HANDLERS =====
 
 
@@ -70,6 +70,12 @@ export async function GET(request) {
             const result =  releaseOneProblemFreeze(ranking, runs);
             setCache(result.ranking, result.runs);
             
+        } else if (mode === 'start') {
+            data = 'scrap iniciado';
+            startScraperJob();
+        } else if (mode === 'stop') {
+            data = 'scrap parado';
+            stopJob();
         }
 
 

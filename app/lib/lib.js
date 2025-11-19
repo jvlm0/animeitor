@@ -441,8 +441,11 @@ export async function scrapLetters() {
 
 
 
-export async function computeRankingAtTimeWithPending(t, teamsDict) {
-
+export async function computeRankingAtTimeWithPending(t, teamsDict, simulated) {
+    if(!simulated) {
+        t++;
+    }
+    
     let runs = await scrapRuns();
 
     if (runs === 'Session expired') {
@@ -478,7 +481,7 @@ export async function computeRankingAtTimeWithPending(t, teamsDict) {
             pending: true,
             status: "pending",
             firstToSolve: r.firstToSolve ?? false,
-            answer: r.answer
+            answer: "PENDING"
         }));
 
     // primeiro AC até 240
@@ -655,11 +658,18 @@ export async function computeRankingAtTimeWithPending(t, teamsDict) {
         .map((team, idx) => ({ ...team, pos: idx + 1 }));
 
     // combina runs (todas até t) + pending
-    const combinedRuns = [
-        ...allRuns.filter(r => r.time <= t),
-        ...pendingRuns
-    ].sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
-
+    let combinedRuns;
+    if (!simulated) {
+        combinedRuns = [
+            ...allRuns.filter(r => r.time <= t)//,
+            //...pendingRuns
+        ].sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
+    } else {
+        combinedRuns = [
+            ...allRuns.filter(r => r.time <= t),
+            ...pendingRuns
+        ].sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
+    }
     return {
         time: t,
         ranking,

@@ -13,6 +13,7 @@ import Sidebar from './sideBar';
 import { renderProblemCell } from './scoreBoard/ProblemCell'
 import Scoreboard from './scoreBoard/index'
 
+
 export default function BrazilianFinals({ initialScoreboard = [],
     initialSubmissions = [],
     teamsDict = {},
@@ -137,26 +138,48 @@ export default function BrazilianFinals({ initialScoreboard = [],
             const newSubmissionResults = {};
             const teamPendingCounts = {};
 
+            // NOVA LÓGICA: Agrupa submissões por time e problema para pegar apenas a última
+            const submissionsByKey = {};
+
             initialSubmissions.forEach(sub => {
                 const key = `${sub.teamName}-${sub.problem}`;
+
+                // Guarda todas as submissões deste problema para este time
+                if (!submissionsByKey[key]) {
+                    submissionsByKey[key] = [];
+                }
+                submissionsByKey[key].push(sub);
+            });
+
+            // Processa apenas a ÚLTIMA submissão de cada problema de cada time
+            Object.entries(submissionsByKey).forEach(([key, submissions]) => {
+                // Ordena por tempo para garantir que pegamos a última
+                const sortedSubmissions = submissions.sort((a, b) => {
+                    // Converte tempo "MM" para número para comparação
+                    const timeA = parseInt(a.time);
+                    const timeB = parseInt(b.time);
+                    return timeB - timeA; // Ordem decrescente (mais recente primeiro)
+                });
+
+                const lastSubmission = sortedSubmissions[0]; // A mais recente
                 const previousState = previousSubmissionsState[key];
 
                 // Determina o estado atual
-                const isPending = !sub.answer || sub.answer === '?' || sub.answer === 'PENDING';
-                const isFrozen = sub.freezeSub === true;
-                const currentAnswer = sub.answer;
+                const isPending = !lastSubmission.answer || lastSubmission.answer === '?' || lastSubmission.answer === 'PENDING';
+                const isFrozen = lastSubmission.freezeSub === true;
+                const currentAnswer = lastSubmission.answer;
 
                 // Cria um identificador único para esta submissão específica
-                const submissionId = `${key}-${sub.time}-${currentAnswer}`;
+                const submissionId = `${key}-${lastSubmission.time}-${currentAnswer}`;
 
                 if (isPending) {
                     // Submissão está pendente
                     newPendingSubmissions[key] = true;
 
                     // Conta pendentes por time
-                    teamPendingCounts[sub.teamName] = (teamPendingCounts[sub.teamName] || 0) + 1;
+                    teamPendingCounts[lastSubmission.teamName] = (teamPendingCounts[lastSubmission.teamName] || 0) + 1;
                 } else if (!isFrozen) {
-                    // Submissão foi julgada e não está congelada
+                    // Submissão foi julgada e NÃO está congelada
 
                     // Determina se deve animar:
                     // 1. Mudou de pendente para julgado OU
@@ -172,11 +195,12 @@ export default function BrazilianFinals({ initialScoreboard = [],
                         // Marca como processada
                         processedSubmissionsRef.current.add(submissionId);
 
+                        // USA O RESULTADO DA ÚLTIMA SUBMISSÃO (NÃO CONGELADA)
                         newSubmissionResults[key] = currentAnswer === 'YES' ? 'accepted' : 'rejected';
 
-                        // Adiciona GIF de sucesso ou falha (se habilitado)
+                        // Adiciona GIF de sucesso ou falha (se habilitado) baseado na ÚLTIMA submissão
                         if (enableGifs) {
-                            const teamKey = sub.teamName;
+                            const teamKey = lastSubmission.teamName;
                             if (currentAnswer === 'YES') {
                                 const randomGif = SuccessGifs[Math.floor(Math.random() * SuccessGifs.length)];
                                 setTeamEmotes(prev => ({ ...prev, [teamKey]: randomGif }));
@@ -243,10 +267,6 @@ export default function BrazilianFinals({ initialScoreboard = [],
                 });
 
                 // Reordena o scoreboard
-                // 1º: Mais problemas resolvidos (maior)
-                // 2º: Menor penalidade (tempo total dos resolvidos)
-                // 3º: Mais submissões pendentes (maior)
-                // 4º: Menos tentativas erradas (menor) - apenas problemas NÃO resolvidos (sem freeze)
                 const sorted = [...updatedScoreboard].sort((a, b) => {
                     if (b.solved !== a.solved) return b.solved - a.solved;
                     if (a.penalty !== b.penalty) return a.penalty - b.penalty;
@@ -264,12 +284,12 @@ export default function BrazilianFinals({ initialScoreboard = [],
 
             // Salva o estado atual para comparação futura
             const newState = {};
-            initialSubmissions.forEach(sub => {
-                const key = `${sub.teamName}-${sub.problem}`;
+            Object.entries(submissionsByKey).forEach(([key, submissions]) => {
+                const lastSubmission = submissions.sort((a, b) => parseInt(b.time) - parseInt(a.time))[0];
                 newState[key] = {
-                    isPending: !sub.answer || sub.answer === '?' || sub.answer === 'PENDING',
-                    isFrozen: sub.freezeSub === true,
-                    answer: sub.answer
+                    isPending: !lastSubmission.answer || lastSubmission.answer === '?' || lastSubmission.answer === 'PENDING',
+                    isFrozen: lastSubmission.freezeSub === true,
+                    answer: lastSubmission.answer
                 };
             });
             setPreviousSubmissionsState(newState);
@@ -414,6 +434,16 @@ export default function BrazilianFinals({ initialScoreboard = [],
                     teamFailEmotes={teamFailEmotes}
                     tableRef={tableRef}
                 />
+            </div>
+
+            <div className="mt-6 text-center text-gray-400 text-sm">
+                <p>
+                    <span className="inline-block bg-gray-800 px-2 py-1 rounded mr-2">R</span>
+                    Ativar/Desativar rolamento automático
+                    <span className="mx-4">|</span>
+                    <span className="inline-block bg-gray-800 px-2 py-1 rounded mr-2">Espaço</span>
+                    Liberar submissão pendente
+                </p>
             </div>
         </div>
     );

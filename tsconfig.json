@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "app/components/BrazilianFinals.jsx", "app/components/BocaScraper.jsx", "app/api/boca-scraper/route..js"  ],
+, "app/components/BrazilianFinals.jsx", "app/components/BocaScraper.jsx", "app/api/boca-scraper/route..js", "app/contest/page.jsx"  ],
   "exclude": ["node_modules"]
 }

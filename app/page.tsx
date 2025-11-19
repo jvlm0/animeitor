@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from "react";
 import BocaScraper from "./components/BocaScraper";
+import { fetchApi } from './lib/api';
 
 export default function Home() {
   const [teams, setTeams] = useState(null);
@@ -11,7 +12,7 @@ export default function Home() {
 
 
   useEffect(() => {
-    fetch('/api/contest')
+    fetchApi('/api/contest')
       .then(res => res.json())
       .then(data => {
         console.log('📦 Dados recebidos de /api/contest:', data.data.startTime);
@@ -21,7 +22,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/boca-scraper?mode=letters')
+    fetchApi('/api/boca-scraper?mode=letters')
       .then(res => res.json())
       .then(data => {
         console.log('📦 Dados recebidos de /api/boca-scraper?mode=letters:', data);
@@ -31,7 +32,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/boca-scraper?mode=teamsDict')
+    fetchApi('/api/boca-scraper?mode=teamsDict')
       .then(res => res.json())
       .then(data => setTeams(data.data));
   }, []);

@@ -34,15 +34,13 @@ async function runScraper() {
   // Aqui você coloca seu código de scraping
   console.log("[JOB] Rodando scraper...");
 
-  const contestInfo = getContestInfo();
 
 
-
-  const time = minutosDesde(contestInfo.startTime, contestInfo.multiplo);
+  const time = minutosDesde(getContestInfo().startTime, getContestInfo().multiplo);
 
   //console.log("condição "+(time <= 300 || cache == null));
   if (time <= 300 || cache == null) {
-    const data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict);
+    const data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict, getContestInfo().simulate);
     cache = data;
     //saveContest(contestInfo.contestName, data);
     console.log("[JOB] Cache atualizado!");
@@ -76,4 +74,10 @@ export function getCache() {
 export function setCache(ranking, runs) {
   cache.ranking = ranking;
   cache.runs = runs;
+}
+
+
+export function stopJob() {
+  isJobStarted = false;
+  clearInterval(jobId);
 }

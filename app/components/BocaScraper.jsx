@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import BrazilianFinals from "./BrazilianFinals"
+import { fetchApi } from '../lib/api';
 
 export default function BocaScraper({ teamsDict = {}, 
                                       letters = [], 
@@ -41,7 +42,7 @@ export default function BocaScraper({ teamsDict = {},
     setError('');
 
     try {
-      const response = await fetch('/api/boca-scraper?mode=score');
+      const response = await fetchApi('/api/boca-scraper?mode=score');
       const data = await response.json();
 
       if (data.success) {
@@ -56,10 +57,12 @@ export default function BocaScraper({ teamsDict = {},
   const handleScrapeByTime = useCallback(async () => {
     setError('');
     try {
+      /*
       if (minutosDesde(contestTime) > 300) {
         return;
       }
-      const response = await fetch('api/boca-scraper?mode=getStateByTime');
+        */
+      const response = await fetchApi('/api/boca-scraper?mode=getStateByTime');
       const data = await response.json();
 
       if (data.success) {
@@ -76,7 +79,7 @@ export default function BocaScraper({ teamsDict = {},
     setError('');
 
     try {
-      const response = await fetch('/api/boca-scraper?mode=runs');
+      const response = await fetchApi('/api/boca-scraper?mode=runs');
       const data = await response.json();
 
       if (data.success) {
@@ -91,7 +94,7 @@ export default function BocaScraper({ teamsDict = {},
     setError('');
 
     try {
-      const response = await fetch('/api/boca-scraper?mode=releaseOneProblem');
+      const response = await fetchApi('/api/boca-scraper?mode=releaseOneProblem');
       const data = await response.json();
 
       if (data.success) {
