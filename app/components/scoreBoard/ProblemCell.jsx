@@ -9,7 +9,7 @@ import { formatProblemDisplay } from '../utils/formatters';
 
 /**
  * Célula que representa um problema específico de um time
- * Mostra: balão (aceito), X (errado), vazio (não tentado), ou pendente
+ * Mostra: balão (aceito), X (errado), vazio (não tentado), pendente ou freeze
  */
 export default function ProblemCell({
     teamId,
@@ -23,6 +23,8 @@ export default function ProblemCell({
     problemColor
 }) {
     const display = formatProblemDisplay(problemData);
+    const hasFreeze = problemData?.freezeTries > 0;
+    const freezeTriesDisplay = problemData?.freezeTries > 1 ? problemData.freezeTries - 1 : '';
 
     return (
         <motion.td
@@ -38,7 +40,7 @@ export default function ProblemCell({
             transition={{ duration: 0.5 }}
         >
             {/* Problema Correto */}
-            {display.type === 'correct' && !isPending && (
+            {display.type === 'correct' && !isPending && !hasFreeze && (
                 <CorrectProblemDisplay
                     problemData={problemData}
                     display={display}
@@ -47,13 +49,18 @@ export default function ProblemCell({
             )}
 
             {/* Problema Errado */}
-            {display.type === 'wrong' && !isPending && (
+            {display.type === 'wrong' && !isPending && !hasFreeze && (
                 <WrongProblemDisplay tries={display.tries} />
             )}
 
             {/* Problema Não Tentado */}
-            {display.type === 'empty' && !isPending && (
+            {display.type === 'empty' && !isPending && !hasFreeze && (
                 <div className="h-full" />
+            )}
+
+            {/* Estado de Freeze */}
+            {hasFreeze && !isPending && (
+                <FreezeDisplay freezeTries={freezeTriesDisplay} />
             )}
 
             {/* Overlay: Pendente */}
@@ -90,6 +97,20 @@ function WrongProblemDisplay({ tries }) {
         <div className="flex flex-col items-center justify-center h-full">
             <X className="w-8 h-8 text-red-500 stroke-[3] mb-1" />
             <div className="text-red-400 font-bold text-sm">{tries}</div>
+        </div>
+    );
+}
+
+// Componente: Estado de Freeze (? + tentativas congeladas)
+function FreezeDisplay({ freezeTries }) {
+    return (
+        <div className="flex flex-col items-center justify-center h-full">
+            <HelpCircle className="w-8 h-8 text-blue-400 stroke-[3]" />
+            {freezeTries && (
+                <div className="text-blue-400 font-bold text-sm mt-1">
+                    {freezeTries}
+                </div>
+            )}
         </div>
     );
 }

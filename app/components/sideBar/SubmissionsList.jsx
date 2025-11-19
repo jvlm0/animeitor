@@ -10,7 +10,9 @@ import Balao from '../Balao';
  * Exibe uma linha individual de submissão
  */
 function SubmissionItem({ submission, teamName, getProblemColor }) {
-  const { time, problem, isPending, answer, tries } = submission;
+  const { time, problem, isPending, answer, tries, freezeSub, freezeTrie } = submission;
+  const isFrozen = freezeSub === true;
+  const freezeTriesDisplay = freezeTrie > 1 ? freezeTrie - 1 : '';
 
   return (
     <div className="flex items-center p-2 hover:bg-gray-700">
@@ -29,7 +31,9 @@ function SubmissionItem({ submission, teamName, getProblemColor }) {
       
       {/* Status da submissão */}
       <div className="w-10 flex items-center justify-center rounded ml-2 font-bold text-sm relative">
-        {isPending ? (
+        {isFrozen ? (
+          <FrozenSubmission freezeTries={freezeTriesDisplay} />
+        ) : isPending ? (
           <PendingIndicator />
         ) : answer === "YES" ? (
           <AcceptedSubmission color={getProblemColor(problem)} tries={tries} />
@@ -37,6 +41,22 @@ function SubmissionItem({ submission, teamName, getProblemColor }) {
           <RejectedSubmission tries={tries} />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Submissão congelada (? + tentativas)
+ */
+function FrozenSubmission({ freezeTries }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full">
+      <HelpCircle className="w-8 h-8 text-blue-400 stroke-[3]" />
+      {freezeTries && (
+        <div className="text-blue-400 font-bold text-sm mt-1">
+          {freezeTries}
+        </div>
+      )}
     </div>
   );
 }

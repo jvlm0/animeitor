@@ -8,6 +8,7 @@ console.log("🔌 Módulo carregado!");
 let cache = null;
 
 let isJobStarted = false;
+let jobId;
 
 function minutosDesde(horario, multiplo) {
   // Divide "13:00" em [13, 00]
@@ -47,6 +48,10 @@ async function runScraper() {
     console.log("[JOB] Cache atualizado!");
   }
 
+  if (time >  300) {
+    clearInterval(jobId);
+  }
+
 }
 
 // Inicia o job apenas uma vez
@@ -59,11 +64,16 @@ export function startScraperJob() {
   runScraper();
 
   
-  setInterval(runScraper, 2 * 1000);
+  jobId = setInterval(runScraper, 2 * 1000);
 
   isJobStarted = true;
 }
 
 export function getCache() {
   return cache;
+}
+
+export function setCache(ranking, runs) {
+  cache.ranking = ranking;
+  cache.runs = runs;
 }

@@ -5,7 +5,7 @@ import {loga,
         getTeamsDict,
         computeRankingAtTimeWithPending, 
         scrapLetters} from '../../lib/lib'
-import { getCache, startScraperJob } from '../../lib/scrapJob';
+import { getCache, setCache, startScraperJob } from '../../lib/scrapJob';
 import {releaseOneProblemFreeze} from '../../lib/realeseProblem';
 
 startScraperJob();
@@ -63,10 +63,13 @@ export async function GET(request) {
                 data = await scrapLetters();
             }
         } else if (mode === 'releaseOneProblem') {
+            
             const ranking = getCache().ranking;
             const runs = getCache().runs;
 
-            releaseOneProblemFreeze(ranking, runs);
+            const result =  releaseOneProblemFreeze(ranking, runs);
+            setCache(result.ranking, result.runs);
+            
         }
 
 

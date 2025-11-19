@@ -451,33 +451,37 @@ export async function computeRankingAtTimeWithPending(t, teamsDict) {
         teamsDict = await getTeamsDict();
     }
 
-    if (teamsDict == {}) {
+    if (!teamsDict || Object.keys(teamsDict).length === 0) {
         teamsDict = await getTeamsDict();
     }
 
-    const allRuns = runs.map(r => ({
-        ...r,
-        time: Number(r.time),
-        freezeSub: r.time > 240,   // <- marca submissões pós-freeze
-    }));
+    // normaliza runs e marca freezeSub
+    const allRuns = runs.map(r => {
+        const timeNum = Number(r.time);
+        return {
+            ...r,
+            time: timeNum,
+            freezeSub: timeNum > 240
+        };
+    });
 
-    // 🔹 1. Filtra submissões até o tempo t E antes do freeze para o ranking
+    // runs válidas para ranking (até t e <= 240)
     const filtered = allRuns
         .filter(r => r.time <= t && r.time <= 240)
         .sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
 
-    // 🔹 2. Pending (não mexe)
+    // pending (simulado)
     const pendingRuns = allRuns
         .filter(r => r.time > t && r.time <= t + 1)
         .map(r => ({
             ...r,
             pending: true,
             status: "pending",
-            firstToSolve: false,
-            answer: null
+            firstToSolve: r.firstToSolve ?? false,
+            answer: r.answer
         }));
 
-    // 🔹 3. Identificar primeiro AC
+    // primeiro AC até 240
     const firstSolveByProblem = {};
     for (const run of filtered) {
         if (run.answer === "YES" && !firstSolveByProblem[run.problem]) {
@@ -488,12 +492,15 @@ export async function computeRankingAtTimeWithPending(t, teamsDict) {
         }
     }
 
-    // 🔹 Dicionário auxiliar: contar freeze tries por time/problema
+    // estruturas auxiliares
     const freezeCounter = {};
+    const freezeSolve = {};   // indica se há YES dentro do freeze por team_problem
+    const freezeFTS = {};     // firstToSolve real dentro do freeze
+    const freezeTime = {};    // tempo do YES dentro do freeze
 
-    // 🔹 Inicializa times
+    // inicializa times a partir do teamsDict
     const teams = {};
-    for (const [teamKey, teamName] of Object.entries(teamsDict)) {
+    for (const [teamKey, teamName] of Object.entries(teamsDict || {})) {
         teams[teamKey] = {
             userSite: teamKey,
             name: teamName,
@@ -503,7 +510,7 @@ export async function computeRankingAtTimeWithPending(t, teamsDict) {
         };
     }
 
-    // 🔹 5. Processar submissões julgadas (somente até o freeze)
+    // processa runs julgadas (até 240)
     for (const run of filtered) {
         const { teamName: teamKey, problem, time, answer } = run;
 
@@ -525,20 +532,20 @@ export async function computeRankingAtTimeWithPending(t, teamsDict) {
                 time: null,
                 solved: false,
                 firstToSolve: false,
-                freezeTries: 0     // <- inicia o campo novo
+                freezeTries: 0
             };
         }
 
         const p = team.problems[problem];
 
-        if (p.solved) continue;
+        if (p.solved) continue; // se já tinha AC antes, não processa
 
-        const firstToSolve =
+        const isFTS =
             answer === "YES" &&
             firstSolveByProblem[problem]?.teamName === teamKey &&
             firstSolveByProblem[problem]?.time === time;
 
-        run.firstToSolve = firstToSolve;
+        run.firstToSolve = isFTS;
 
         if (answer === "NO") {
             p.tries++;
@@ -546,39 +553,100 @@ export async function computeRankingAtTimeWithPending(t, teamsDict) {
             p.tries++;
             p.time = time;
             p.solved = true;
-            p.firstToSolve = firstToSolve;
+            p.firstToSolve = isFTS;
+            // Nota: NÃO incrementamos team.solved/penalty aqui, mantemos contagem base
             team.solved++;
             team.penalty += p.time + 20 * (p.tries - 1);
         }
     }
 
-    // 🔹 6. Contabilizar freezeTries (runs pós-freeze)
-    for (const r of allRuns) {
-        if (r.time > 240) {
-            const key = `${r.teamName}_${r.problem}`;
+    // runs ocorridas no freeze (240 < time <= t), em ordem
+    const freezeRunsUpToT = allRuns
+        .filter(r => r.time > 240 && r.time <= t)
+        .sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
 
-            if (!freezeCounter[key]) {
-                freezeCounter[key] = 0;
-            }
+    for (const r of freezeRunsUpToT) {
+        const key = `${r.teamName}_${r.problem}`;
+        freezeCounter[key] = (freezeCounter[key] || 0) + 1;
+        r.freezeTrie = freezeCounter[key];
 
-            freezeCounter[key]++;
-
-            // adiciona freezeTrie direto na run
-            r.freezeTrie = freezeCounter[key];
+        if (r.answer === "YES") {
+            freezeSolve[key] = true;
+            freezeFTS[key] = r.firstToSolve ?? false;
+            freezeTime[key] = r.time;
         }
     }
 
-    // Copiar freezeTries para o ranking
+    // aplicar impacto das freezeRuns ao objeto de problems — mas SEM contar no score
+    for (const fullKey of Object.keys(freezeCounter)) {
+        const [teamKey, prob] = fullKey.split('_');
+        const triesF = freezeCounter[fullKey];
+
+        if (!teams[teamKey]) {
+            teams[teamKey] = {
+                userSite: teamKey,
+                name: teamKey,
+                problems: {},
+                solved: 0,
+                penalty: 0
+            };
+        }
+
+        // cria problema só se necessário, sem sobrescrever campos reais existentes
+        if (!teams[teamKey].problems[prob]) {
+            teams[teamKey].problems[prob] = {
+                tries: 0,
+                time: null,
+                solved: false,
+                firstToSolve: false,
+                freezeTries: triesF
+            };
+        } else {
+            teams[teamKey].problems[prob].freezeTries = triesF;
+        }
+
+        const p = teams[teamKey].problems[prob];
+
+        // SE existe um YES dentro do freeze, marcar o estado REAL do problema
+        // (visível como solved=true), mas NÃO aplicar ao score (não incrementa team.solved/penalty)
+        if (freezeSolve[fullKey]) {
+            p.solved = true;
+            p.time = freezeTime[fullKey];
+            p.firstToSolve = freezeFTS[fullKey];
+            // NÃO alterar teams[teamKey].solved nem teams[teamKey].penalty aqui
+        }
+    }
+
+    // garantir freezeTries default
     for (const [teamKey, team] of Object.entries(teams)) {
         for (const [prob, pdata] of Object.entries(team.problems)) {
-            const key = `${teamKey}_${prob}`;
-            pdata.freezeTries = freezeCounter[key] || 0;
+            if (typeof pdata.freezeTries === 'undefined') pdata.freezeTries = 0;
+            if (typeof pdata.tries === 'undefined') pdata.tries = 0;
         }
     }
 
-    // 🔹 7. Montar ranking
+    // calcular ranking VISÍVEL: ignora problemas com freezeTries > 0 no score
     const ranking = Object.values(teams)
-        .map(team => ({ ...team, pos: 0 }))
+        .map(team => {
+            let visibleSolved = 0;
+            let visiblePenalty = 0;
+
+            for (const pdata of Object.values(team.problems)) {
+                if (pdata.solved && pdata.freezeTries === 0) {
+                    visibleSolved++;
+                    // pdata.time pode ser null — proteger
+                    const ptime = typeof pdata.time === 'number' ? pdata.time : 0;
+                    const ptries = pdata.tries || 0;
+                    visiblePenalty += ptime + 20 * Math.max(0, ptries - 1);
+                }
+            }
+
+            return {
+                ...team,
+                solved: visibleSolved,
+                penalty: visiblePenalty
+            };
+        })
         .sort((a, b) => {
             if (b.solved !== a.solved) return b.solved - a.solved;
             if (a.penalty !== b.penalty) return a.penalty - b.penalty;
@@ -586,18 +654,22 @@ export async function computeRankingAtTimeWithPending(t, teamsDict) {
         })
         .map((team, idx) => ({ ...team, pos: idx + 1 }));
 
-    // 🔹 8. Combinar todas as runs
-    // 🔹 7. Combinar TODAS as runs até t + pendentes
+    // combina runs (todas até t) + pending
     const combinedRuns = [
-        ...allRuns.filter(r => r.time <= t),   // todas até t (inclui pós-freeze)
-        ...pendingRuns                         // pendentes
+        ...allRuns.filter(r => r.time <= t),
+        ...pendingRuns
     ].sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
+
     return {
         time: t,
         ranking,
         runs: combinedRuns
     };
 }
+
+
+
+
 
 
 export async function scrap() {

@@ -14,14 +14,14 @@ import { renderProblemCell } from './scoreBoard/ProblemCell'
 import Scoreboard from './scoreBoard/index'
 
 export default function BrazilianFinals({ initialScoreboard = [],
-                                          initialSubmissions = [],
-                                          teamsDict = {},
-                                          letters = [],
-                                          enableGifs = true,
-                                          START_TIME = "13:00:00",
-                                          multiplo = 1,
-                                          contestName = "",
-                                          timeLastUpdate = 0 }) {
+    initialSubmissions = [],
+    teamsDict = {},
+    letters = [],
+    enableGifs = true,
+    START_TIME = "13:00:00",
+    multiplo = 1,
+    contestName = "",
+    timeLastUpdate = 0 }) {
 
     const [scoreboard, setScoreboard] = useState([]);
     const [submissions, setSubmissions] = useState([]);
@@ -42,6 +42,20 @@ export default function BrazilianFinals({ initialScoreboard = [],
     // Ref para rastrear submissões já processadas (evita re-animações)
     const processedSubmissionsRef = useRef(new Set());
     const isFirstLoadRef = useRef(true);
+    const [scrollFlag, setScrollFlag] = useState(true);
+
+
+    useEffect(() => {
+        function handleKeyDown(e) {
+            if (e.key === "r") {
+                setScrollFlag(f => !f);
+            }
+        }
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
+
 
 
     // Inicializa o scoreboard com IDs únicos
@@ -50,13 +64,13 @@ export default function BrazilianFinals({ initialScoreboard = [],
             const formattedScoreboard = initialScoreboard.map((team, index) => {
                 const teamName = team.userSite.split('/')[0];
 
-                // Calcula apenas tentativas de problemas NÃO resolvidos
+                // Calcula apenas tentativas de problemas NÃO resolvidos (excluindo freeze)
                 let wrongTries = 0;
 
                 if (team.problems) {
                     Object.values(team.problems).forEach(problem => {
-                        if (problem && problem.tries !== null && problem.time === null) {
-                            // Problema tem tentativas mas não foi resolvido (tempo é null)
+                        if (problem && problem.tries !== null && problem.time === null && !problem.freezeTries) {
+                            // Problema tem tentativas mas não foi resolvido (tempo é null) e não está no freeze
                             wrongTries += problem.tries;
                         }
                     });
@@ -72,7 +86,7 @@ export default function BrazilianFinals({ initialScoreboard = [],
                     penalty: team.penalty,
                     problems: team.problems,
                     pendingCount: 0, // Será atualizado pelo useEffect de submissões
-                    wrongTries: wrongTries // Apenas tentativas erradas
+                    wrongTries: wrongTries // Apenas tentativas erradas (sem freeze)
                 };
             });
 
@@ -93,8 +107,9 @@ export default function BrazilianFinals({ initialScoreboard = [],
             if (isFirstLoadRef.current) {
                 initialSubmissions.forEach(sub => {
                     const isPending = !sub.answer || sub.answer === '?' || sub.answer === 'PENDING';
-                    // Só marca como processada se NÃO estiver pendente
-                    if (!isPending) {
+                    const isFrozen = sub.freezeSub === true;
+                    // Só marca como processada se NÃO estiver pendente e NÃO estiver congelada
+                    if (!isPending && !isFrozen) {
                         const key = `${sub.teamName}-${sub.problem}`;
                         const submissionId = `${key}-${sub.time}-${sub.answer}`;
                         processedSubmissionsRef.current.add(submissionId);
@@ -111,7 +126,9 @@ export default function BrazilianFinals({ initialScoreboard = [],
                 answer: sub.answer,
                 firstToSolve: sub.firstToSolve,
                 tries: sub.tries > 0 ? sub.tries : '',
-                isPending: !sub.answer || sub.answer === '?' || sub.answer === 'PENDING'
+                isPending: !sub.answer || sub.answer === '?' || sub.answer === 'PENDING',
+                freezeSub: sub.freezeSub,
+                freezeTrie: sub.freezeTrie || 0
             }));
             setSubmissions(recentSubmissions);
 
@@ -126,6 +143,7 @@ export default function BrazilianFinals({ initialScoreboard = [],
 
                 // Determina o estado atual
                 const isPending = !sub.answer || sub.answer === '?' || sub.answer === 'PENDING';
+                const isFrozen = sub.freezeSub === true;
                 const currentAnswer = sub.answer;
 
                 // Cria um identificador único para esta submissão específica
@@ -137,16 +155,18 @@ export default function BrazilianFinals({ initialScoreboard = [],
 
                     // Conta pendentes por time
                     teamPendingCounts[sub.teamName] = (teamPendingCounts[sub.teamName] || 0) + 1;
-                } else {
-                    // Submissão foi julgada
+                } else if (!isFrozen) {
+                    // Submissão foi julgada e não está congelada
 
                     // Determina se deve animar:
                     // 1. Mudou de pendente para julgado OU
-                    // 2. É uma nova submissão julgada que nunca vimos antes
+                    // 2. É uma nova submissão julgada que nunca vimos antes OU
+                    // 3. Mudou de congelada para julgada
                     const changedFromPending = previousState && previousState.isPending && !isPending;
+                    const changedFromFrozen = previousState && previousState.isFrozen && !isFrozen;
                     const isNewJudgedSubmission = !processedSubmissionsRef.current.has(submissionId);
 
-                    const shouldAnimate = changedFromPending || isNewJudgedSubmission;
+                    const shouldAnimate = changedFromPending || isNewJudgedSubmission || changedFromFrozen;
 
                     if (shouldAnimate) {
                         // Marca como processada
@@ -205,11 +225,11 @@ export default function BrazilianFinals({ initialScoreboard = [],
             // Atualiza contagem de pendentes no scoreboard e reordena
             setScoreboard(prevScoreboard => {
                 const updatedScoreboard = prevScoreboard.map(team => {
-                    // Recalcula tentativas erradas (problemas não resolvidos)
+                    // Recalcula tentativas erradas (problemas não resolvidos, excluindo freeze)
                     let wrongTries = 0;
                     if (team.problems) {
                         Object.values(team.problems).forEach(problem => {
-                            if (problem && problem.tries !== null && problem.time === null) {
+                            if (problem && problem.tries !== null && problem.time === null && !problem.freezeTries) {
                                 wrongTries += problem.tries;
                             }
                         });
@@ -226,7 +246,7 @@ export default function BrazilianFinals({ initialScoreboard = [],
                 // 1º: Mais problemas resolvidos (maior)
                 // 2º: Menor penalidade (tempo total dos resolvidos)
                 // 3º: Mais submissões pendentes (maior)
-                // 4º: Menos tentativas erradas (menor) - apenas problemas NÃO resolvidos
+                // 4º: Menos tentativas erradas (menor) - apenas problemas NÃO resolvidos (sem freeze)
                 const sorted = [...updatedScoreboard].sort((a, b) => {
                     if (b.solved !== a.solved) return b.solved - a.solved;
                     if (a.penalty !== b.penalty) return a.penalty - b.penalty;
@@ -248,6 +268,7 @@ export default function BrazilianFinals({ initialScoreboard = [],
                 const key = `${sub.teamName}-${sub.problem}`;
                 newState[key] = {
                     isPending: !sub.answer || sub.answer === '?' || sub.answer === 'PENDING',
+                    isFrozen: sub.freezeSub === true,
                     answer: sub.answer
                 };
             });
@@ -257,7 +278,7 @@ export default function BrazilianFinals({ initialScoreboard = [],
 
     // Scroll automático para acompanhar submissões
     useEffect(() => {
-        if (scoreboard.length === 0 || !tableRef.current) return;
+        if (scoreboard.length === 0 || !tableRef.current || !scrollFlag) return;
 
         // Cancela scroll anterior se houver
         if (scrollTimeoutRef.current) {

@@ -14,7 +14,7 @@ export default function BocaScraper({ teamsDict = {},
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Intervalo em milissegundos (30 segundos)
+  // Intervalo em milissegundos (2 segundos)
   const REFRESH_INTERVAL = 2000;
 
   function minutosDesde(horario) {
@@ -46,8 +46,6 @@ export default function BocaScraper({ teamsDict = {},
 
       if (data.success) {
         setScoreData(data.data);
-
-
       }
     } catch (err) {
       setError('Erro ao buscar dados de score: ' + err.message);
@@ -57,8 +55,10 @@ export default function BocaScraper({ teamsDict = {},
 
   const handleScrapeByTime = useCallback(async () => {
     setError('');
-    console.log(contestTime);
     try {
+      if (minutosDesde(contestTime) > 300) {
+        return;
+      }
       const response = await fetch('api/boca-scraper?mode=getStateByTime');
       const data = await response.json();
 
@@ -87,6 +87,23 @@ export default function BocaScraper({ teamsDict = {},
     }
   }, []);
 
+  const handleReleaseOneProblem = useCallback(async () => {
+    setError('');
+
+    try {
+      const response = await fetch('/api/boca-scraper?mode=releaseOneProblem');
+      const data = await response.json();
+
+      if (data.success) {
+        setScoreData(data.data.ranking);
+        setSubmissions(data.data.runs);
+        setTime(data.data.time);
+      }
+    } catch (err) {
+      setError('Erro ao liberar problema: ' + err.message);
+    }
+  }, []);
+
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     await Promise.all([
@@ -109,6 +126,23 @@ export default function BocaScraper({ teamsDict = {},
     // Cleanup: limpa o intervalo quando o componente é desmontado
     return () => clearInterval(intervalId);
   }, [fetchAllData]);
+
+  // Hook para detectar tecla Espaço e liberar um problema
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      if (event.code === 'Space' || event.key === ' ') {
+        event.preventDefault(); // Previne scroll da página
+        handleReleaseOneProblem();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+
+    // Cleanup: remove o listener quando o componente é desmontado
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [handleReleaseOneProblem]);
 
   return (
     <>
