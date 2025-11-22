@@ -72,7 +72,7 @@ export async function GET(request) {
             
         } else if (mode === 'start') {
             data = 'scrap iniciado';
-            startScraperJob();
+            await startScraperJob();
         } else if (mode === 'stop') {
             data = 'scrap parado';
             stopJob();

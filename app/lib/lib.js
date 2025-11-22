@@ -109,8 +109,8 @@ export async function loga() {
 
         // PASSO 3: Calcular hash da senha
         console.log('🔐 PASSO 3: Calculando hash...');
-        const usuario = 'juiz1';
-        const senha = '147juiz741';
+        const usuario = process.env.BOCA_USER;
+        const senha = process.env.BOCA_PASS;
         const hash1 = jsMyHash(senha);
         const passwordHash = jsMyHash(hash1 + salt);
 
