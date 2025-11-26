@@ -23,7 +23,7 @@ export default function TeamCell({
       animate={{ backgroundColor }}
       transition={{ duration: 0.5 }}
     >
-      {teamName}
+      {teamName.substring(0, 80)}
 
       {/* GIF de Sucesso */}
       {successGif && <SuccessGif gif={successGif} />}

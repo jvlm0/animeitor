@@ -5,4 +5,9 @@ export const SuccessGifs = [
     `${BASE_PATH}/success3.gif`,
     `${BASE_PATH}/success4.gif`,
     `${BASE_PATH}/success5.gif`,
+    `${BASE_PATH}/success6.gif`,
+    `${BASE_PATH}/success7.gif`,
+    `${BASE_PATH}/success8.gif`,
+    `${BASE_PATH}/success9.gif`,
+    `${BASE_PATH}/success10.gif`,
 ]
