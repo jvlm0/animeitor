@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import * as cheerio from "cheerio";
 
 const BASE_URL = 'http://maratona.td.utfpr.edu.br/boca';
+const FREEZE_TIME = 240;
 
 
 
@@ -111,6 +112,9 @@ export async function loga() {
         console.log('🔐 PASSO 3: Calculando hash...');
         const usuario = process.env.BOCA_USER;
         const senha = process.env.BOCA_PASS;
+
+        
+
         const hash1 = jsMyHash(senha);
         const passwordHash = jsMyHash(hash1 + salt);
 
@@ -232,7 +236,10 @@ export async function scrapRuns() {
 
         // Extrai apenas YES / NO
         const answer = answerRaw.startsWith("YES") ? "YES" :
+            answerRaw.startsWith("Not") ? "PENDING" :
             answerRaw.startsWith("NO") ? "NO" : answerRaw;
+
+        
 
         // Também podemos extrair a descrição do erro, ex: "Wrong answer"
         const answerDetail = answerRaw.replace(/^YES|^NO|-|\s/g, "").trim();
@@ -404,10 +411,6 @@ export async function computeRankingAtTime(t, teamsDict) {
 
 export async function scrapLetters() {
 
-    if (globalThis.letters.length > 0) {
-        return globalThis.letters;
-    }
-
     const response = await fetchWithCookies('/judge/score.php');
     const html = await response.text();
 
@@ -430,7 +433,11 @@ export async function scrapLetters() {
         return $(el).text().split(' ')[0];
     }).get();
 
-    globalThis.letters = headers.filter(h => /^[A-Z]$/.test(h));
+    const letters = headers.filter(h => /^(?:[A-Z]\d+|[A-Z]|\d+)$/.test(h));
+
+    if (letters.length > 0) {
+        globalThis.letters = letters;
+    }
 
     console.log("letras " + letters)
 
@@ -742,4 +749,218 @@ export async function scrap() {
     });
 
     return teams;
+}
+
+
+
+
+
+export async function computeFullRanking(t, teamsDict) {
+    let runs = await scrapRuns();
+
+    if (runs === 'Session expired') {
+        await loga();
+        runs = await scrapRuns();
+        teamsDict = await getTeamsDict();
+    }
+
+    if (!teamsDict || Object.keys(teamsDict).length === 0) {
+        teamsDict = await getTeamsDict();
+    }
+
+    // normaliza runs e marca freezeSub
+    const allRuns = runs.map(r => {
+        const timeNum = Number(r.time);
+        return {
+            ...r,
+            time: timeNum,
+            freezeSub: timeNum > FREEZE_TIME
+        };
+    });
+
+    // runs válidas para ranking (até 240 - antes do freeze)
+    const filtered = allRuns
+        .filter(r => r.time <= FREEZE_TIME)
+        .sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
+
+    // primeiro AC até 240 (antes do freeze)
+    const firstSolveByProblem = {};
+    for (const run of filtered) {
+        if (run.answer === "YES" && !firstSolveByProblem[run.problem]) {
+            firstSolveByProblem[run.problem] = {
+                teamName: run.teamName,
+                time: run.time
+            };
+        }
+    }
+
+    // estruturas auxiliares para freeze
+    const freezeCounter = {};
+    const freezeSolve = {};   // indica se há YES dentro do freeze por team_problem
+    const freezeFTS = {};     // firstToSolve real dentro do freeze
+    const freezeTime = {};    // tempo do YES dentro do freeze
+
+    // inicializa times a partir do teamsDict
+    const teams = {};
+    for (const [teamKey, teamName] of Object.entries(teamsDict || {})) {
+        teams[teamKey] = {
+            userSite: teamKey,
+            name: teamName,
+            problems: {},
+            solved: 0,
+            penalty: 0
+        };
+    }
+
+    // processa runs julgadas (até 240)
+    for (const run of filtered) {
+        const { teamName: teamKey, problem, time, answer } = run;
+
+        if (!teams[teamKey]) {
+            teams[teamKey] = {
+                userSite: teamKey,
+                name: teamKey,
+                problems: {},
+                solved: 0,
+                penalty: 0
+            };
+        }
+
+        const team = teams[teamKey];
+
+        if (!team.problems[problem]) {
+            team.problems[problem] = {
+                tries: 0,
+                time: null,
+                solved: false,
+                firstToSolve: false,
+                freezeTries: 0
+            };
+        }
+
+        const p = team.problems[problem];
+
+        if (p.solved) continue; // se já tinha AC antes, não processa
+
+        const isFTS =
+            answer === "YES" &&
+            firstSolveByProblem[problem]?.teamName === teamKey &&
+            firstSolveByProblem[problem]?.time === time;
+
+        run.firstToSolve = isFTS;
+
+        if (answer === "NO") {
+            p.tries++;
+        } else if (answer === "YES") {
+            p.tries++;
+            p.time = time;
+            p.solved = true;
+            p.firstToSolve = isFTS;
+            team.solved++;
+            team.penalty += p.time + 20 * (p.tries - 1);
+        }
+    }
+
+    // runs ocorridas no freeze (> 240), em ordem
+    const freezeRuns = allRuns
+        .filter(r => r.time > FREEZE_TIME)
+        .sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
+
+    for (const r of freezeRuns) {
+        const key = `${r.teamName}_${r.problem}`;
+        freezeCounter[key] = (freezeCounter[key] || 0) + 1;
+        r.freezeTrie = freezeCounter[key];
+
+        if (r.answer === "YES") {
+            freezeSolve[key] = true;
+            freezeFTS[key] = r.firstToSolve ?? false;
+            freezeTime[key] = r.time;
+        }
+    }
+
+    // aplicar impacto das freezeRuns ao objeto de problems — mas SEM contar no score
+    for (const fullKey of Object.keys(freezeCounter)) {
+        const [teamKey, prob] = fullKey.split('_');
+        const triesF = freezeCounter[fullKey];
+
+        if (!teams[teamKey]) {
+            teams[teamKey] = {
+                userSite: teamKey,
+                name: teamKey,
+                problems: {},
+                solved: 0,
+                penalty: 0
+            };
+        }
+
+        // cria problema só se necessário, sem sobrescrever campos reais existentes
+        if (!teams[teamKey].problems[prob]) {
+            teams[teamKey].problems[prob] = {
+                tries: 0,
+                time: null,
+                solved: false,
+                firstToSolve: false,
+                freezeTries: triesF
+            };
+        } else {
+            teams[teamKey].problems[prob].freezeTries = triesF;
+        }
+
+        const p = teams[teamKey].problems[prob];
+
+        // SE existe um YES dentro do freeze, marcar o estado REAL do problema
+        // (visível como solved=true), mas NÃO aplicar ao score (não incrementa team.solved/penalty)
+        if (freezeSolve[fullKey]) {
+            p.solved = true;
+            p.time = freezeTime[fullKey];
+            p.firstToSolve = freezeFTS[fullKey];
+            // NÃO alterar teams[teamKey].solved nem teams[teamKey].penalty aqui
+        }
+    }
+
+    // garantir freezeTries default
+    for (const [teamKey, team] of Object.entries(teams)) {
+        for (const [prob, pdata] of Object.entries(team.problems)) {
+            if (typeof pdata.freezeTries === 'undefined') pdata.freezeTries = 0;
+            if (typeof pdata.tries === 'undefined') pdata.tries = 0;
+        }
+    }
+
+    // calcular ranking VISÍVEL: ignora problemas com freezeTries > 0 no score
+    const ranking = Object.values(teams)
+        .map(team => {
+            let visibleSolved = 0;
+            let visiblePenalty = 0;
+
+            for (const pdata of Object.values(team.problems)) {
+                if (pdata.solved && pdata.freezeTries === 0) {
+                    visibleSolved++;
+                    // pdata.time pode ser null — proteger
+                    const ptime = typeof pdata.time === 'number' ? pdata.time : 0;
+                    const ptries = pdata.tries || 0;
+                    visiblePenalty += ptime + 20 * Math.max(0, ptries - 1);
+                }
+            }
+
+            return {
+                ...team,
+                solved: visibleSolved,
+                penalty: visiblePenalty
+            };
+        })
+        .sort((a, b) => {
+            if (b.solved !== a.solved) return b.solved - a.solved;
+            if (a.penalty !== b.penalty) return a.penalty - b.penalty;
+            return a.userSite.localeCompare(b.userSite);
+        })
+        .map((team, idx) => ({ ...team, pos: idx + 1 }));
+
+    // retorna todas as runs ordenadas
+    const sortedRuns = allRuns.sort((a, b) => a.time - b.time || a.runNumber - b.runNumber);
+
+    return {
+        time: t,
+        ranking,
+        runs: sortedRuns
+    };
 }

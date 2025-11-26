@@ -1,15 +1,15 @@
 import { getContestInfo } from "../contest/contestInfo";
-import { computeRankingAtTimeWithPending } from "./lib";
+import { computeRankingAtTimeWithPending, computeFullRanking } from "./lib";
 import { saveContest } from "./saveContest";
 
 console.log("🔌 Módulo carregado!");
 
+const CONTEST_TIME = 300;
 
 let cache = null;
-
 let isJobStarted = false;
-let jobId;
-let contest;
+let jobId = null;
+let contest = null;
 
 function minutosDesde(horario, multiplo) {
   // Divide "13:00" em [13, 00]
@@ -30,8 +30,6 @@ function minutosDesde(horario, multiplo) {
   return diffMin * multiplo;
 }
 
-
-
 // Tenta obter o contest info via API para garantir consistência entre processos
 async function fetchContestInfoFromApi() {
   try {
@@ -46,40 +44,65 @@ async function fetchContestInfoFromApi() {
   }
 }
 
-
 async function runScraper() {
-  // Aqui você coloca seu código de scraping
   console.log("[JOB] Rodando scraper...");
+  
+  // ✅ Busca contest atualizado a cada execução
+  contest = await fetchContestInfoFromApi();
+  console.log(`[JOB] Contest: ${contest.contestName}, Start: ${contest.startTime}, Multiplo: ${contest.multiplo}, Simulate: ${contest.simulate}`);
+  
   const time = minutosDesde(contest.startTime, contest.multiplo);
+  console.log(`[JOB] Tempo calculado: ${time.toFixed(2)} minutos`);
 
-  //console.log("condição "+(time <= 300 || cache == null));
-  if (time <= 300 || cache == null) {
-    const data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict, contest.simulate);
+  if (time <= CONTEST_TIME || cache == null) {
+    let data; 
+    if (contest.simulate) {
+      data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict, contest.simulate);
+    } else {
+      //data = await computeFullRanking(time, globalThis.teamsDict);
+      data = await computeRankingAtTimeWithPending(10000, globalThis.teamsDict, contest.simulate);
+    }
+    
     cache = data;
-    //saveContest(contestInfo.contestName, data);
     console.log("[JOB] Cache atualizado!");
+  } else {
+    console.log("[JOB] Tempo > 300 e cache existe, mantendo cache atual");
   }
 
-  if (time > 300) {
-    clearInterval(jobId);
+  if (time > CONTEST_TIME) {
+    console.log("[JOB] ⚠️ Tempo > 300, parando job automaticamente");
+    stopJob();
   }
-
 }
 
-// Inicia o job apenas uma vez
+// Inicia o job
 export async function startScraperJob() {
-  if (isJobStarted) return;
+  // Se já está rodando, não faz nada
+  if (isJobStarted) {
+    console.log("⚠️ Job já está rodando!");
+    return;
+  }
 
   console.log("🔄 Iniciando job periódico...");
+  
+  // ✅ SEMPRE busca contestInfo atualizado ao iniciar
   contest = await fetchContestInfoFromApi();
+  console.log(`[JOB] Configuração carregada:`, contest);
+
+  // Marca como iniciado ANTES de executar
+  isJobStarted = true;
 
   // Executa 1x ao iniciar
-  runScraper();
+  await runScraper();
 
-
-  jobId = setInterval(runScraper, 2 * 1000);
-
-  isJobStarted = true;
+  // ✅ Só cria o interval se ainda estiver marcado como started
+  // (pode ter parado automaticamente no runScraper se time > 300)
+  if (isJobStarted) {
+    jobId = setInterval(runScraper, 2 * 1000);
+    console.log("✅ Job iniciado com sucesso!");
+  } else {
+    console.log("⚠️ Job foi parado automaticamente durante a primeira execução");
+  }
 }
 
 export function getCache() {
@@ -87,12 +110,30 @@ export function getCache() {
 }
 
 export function setCache(ranking, runs) {
-  cache.ranking = ranking;
-  cache.runs = runs;
+  if (cache) {
+    cache.ranking = ranking;
+    cache.runs = runs;
+  }
 }
 
-
 export function stopJob() {
+  if (!isJobStarted && !jobId) {
+    console.log("[JOB] Job já estava parado");
+    return;
+  }
+  
+  console.log("[JOB] 🛑 Parando job...");
+  
+  // ✅ Limpa TUDO para garantir que pode reiniciar
   isJobStarted = false;
-  clearInterval(jobId);
+  
+  if (jobId) {
+    clearInterval(jobId);
+    jobId = null;
+  }
+  
+  // ✅ Opcional: limpar o contest também para forçar reload
+  contest = null;
+  
+  console.log("✅ Job parado com sucesso!");
 }
