@@ -9,9 +9,10 @@ import { getCache, setCache, startScraperJob, stopJob } from '../../lib/scrapJob
 import {releaseOneProblemFreeze} from '../../lib/realeseProblem';
 
 
+
+startScraperJob();
+
 // ===== ROUTE HANDLERS =====
-
-
 
 export async function GET(request) {
     try {
