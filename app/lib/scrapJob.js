@@ -33,7 +33,7 @@ function minutosDesde(horario, multiplo) {
 // Tenta obter o contest info via API para garantir consistência entre processos
 async function fetchContestInfoFromApi() {
   try {
-    const base = process.env.SERVER_URL || 'http://localhost:3000/animeitor';
+    const base = process.env.NEXT_PUBLIC_BASE_PATH || 'http://localhost:3000/animeitor';
     const res = await fetch(`${base}/api/contest`);
     if (!res.ok) throw new Error('Resposta não OK');
     const json = await res.json();

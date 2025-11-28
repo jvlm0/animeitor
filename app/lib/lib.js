@@ -435,7 +435,7 @@ export async function scrapLetters() {
 
     const letters = headers.filter(h => /^(?:[A-Z]\d+|[A-Z]|\d+)$/.test(h));
 
-    if (letters.length > 0) {
+    if (letters.length > 0 && letters !== "Session expired") {
         globalThis.letters = letters;
     }
 
