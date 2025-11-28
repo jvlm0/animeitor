@@ -165,7 +165,7 @@ export async function loga() {
 }
 
 export async function getTeamsDict() {
-
+/*
     globalThis.teamsDict = {
         "teamr29": "(UNICAMP) Yvensfobia",
         "teamr11": "(UFPR) Mestres do Teorema",
@@ -207,6 +207,7 @@ export async function getTeamsDict() {
         "teamr23": "(Universidade) MTH",
         "teamr27": "(UMSA) Os Sabrossos"
     };
+    */
 
     if (Object.keys(globalThis.teamsDict).length > 0) return globalThis.teamsDict;
 
@@ -237,10 +238,10 @@ export async function scrapRuns() {
     console.log('📊 Iniciando scraping da página de score...');
     const response = await fetchWithCookies('/judge/runchief.php');
 
-    //const html = await response.text();
+    const html = await response.text();
 
-    const filePath = path.join(process.cwd(), 'public', 'judge.html');
-    const html = await fs.readFile(filePath, 'utf8');
+    //const filePath = path.join(process.cwd(), 'public', 'judge.html');
+    //const html = await fs.readFile(filePath, 'utf8');
 
     if (html.includes('Session expired') || html.includes('log in again')) {
         console.error('⚠️ Sessão expirou durante o scraping!');

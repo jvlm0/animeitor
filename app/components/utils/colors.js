@@ -1,18 +1,19 @@
 export const getProblemColor = (problemLetter) => {
     const colors = {
-        'A': '#FFFFFF', // Vermelho
-        'B': '#000000', // Turquesa
-        'C': '#FF0000', // Azul claro
-        'D': '#800100', // Salmão
-        'E': '#018000', // Verde água
-        'F': '#0000fe', // Amarelo
-        'G': '#BB8FCE', // Roxo claro
-        'H': '#010180', // Azul céu
-        'I': '#fe01ff', // Laranja
-        'J': '#800181', // Verde
-        'K': '#00fe01', // Terracota
-        'L': '#01feff', // Verde azulado
-        'M': '#c0c0c1', // Dourado
+        'A': '#FFFFFF',
+        'B': '#000000',
+        'C': '#FF0000',
+        'D': '#800100',
+        'E': '#018000',
+        'F': '#0000fe',
+        'G': '#BB8FCE',
+        'H': '#010180',
+        'I': '#fe01ff',
+        'J': '#800181',
+        'K': '#00fe01',
+        'L': '#01feff',
+        'M': '#c0c0c1',
+        'N': '#FFA500' 
     };
     return colors[problemLetter] || '#808080';
 };

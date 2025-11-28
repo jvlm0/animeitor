@@ -106,7 +106,7 @@ export default function BocaScraper({ teamsDict = {},
     } catch (err) {
       setError('Erro ao liberar problema: ' + err.message);
     }
-  }, []);
+  }, [sede]);
 
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);

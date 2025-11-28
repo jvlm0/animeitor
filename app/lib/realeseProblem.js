@@ -124,3 +124,113 @@ export function releaseOneProblemFreeze(ranking, runs) {
         }
     };
 }
+
+
+/**
+ * Libera um problema específico de um time específico.
+ * 
+ * @param {Array} ranking - Array com todos os times
+ * @param {Array} runs - Array com todas as runs
+ * @param {string} targetTeamUserSite - userSite do time (ex: "teamtd1")
+ * @param {string} targetProblem - Letra do problema (ex: "A")
+ * 
+ * @returns {{ ranking: Array, runs: Array, released: Object|null }}
+ */
+export function releaseSpecificProblem(ranking, runs, targetTeamUserSite, targetProblem) {
+    // Cópia dos arrays
+    const teams = [...ranking];
+
+    // Encontra o time específico
+    const targetTeam = teams.find(t => t.userSite === targetTeamUserSite);
+    
+    if (!targetTeam) {
+        console.warn(`[releaseSpecificProblem] Time ${targetTeamUserSite} não encontrado`);
+        return {
+            ranking,
+            runs,
+            released: null
+        };
+    }
+
+    // Verifica se o problema existe e tem freezeTries
+    if (!targetTeam.problems[targetProblem] || !targetTeam.problems[targetProblem].freezeTries) {
+        console.warn(`[releaseSpecificProblem] Problema ${targetProblem} do time ${targetTeamUserSite} não tem freezeTries`);
+        return {
+            ranking,
+            runs,
+            released: null
+        };
+    }
+
+    const probData = targetTeam.problems[targetProblem];
+    const N = probData.freezeTries;
+
+    console.log(`[releaseSpecificProblem] Liberando ${N} tentativas do problema ${targetProblem} do time ${targetTeamUserSite}`);
+
+    // --- 1) Atualiza o tries do problema somando freezeTries e zera freezeTries ---
+    probData.tries = (probData.tries || 0) + N;
+    probData.freezeTries = 0;
+
+    // --- 2) Atualiza as N runs congeladas correspondentes ---
+    let changed = 0;
+    for (const r of runs) {
+        if (changed >= N) break;
+        if (r.teamName === targetTeamUserSite && r.problem === targetProblem && r.freezeSub) {
+            r.freezeSub = false;
+            r.freezeTrie = 0;
+            changed++;
+        }
+    }
+
+    console.log(`[releaseSpecificProblem] ${changed} runs atualizadas`);
+
+    // --- 3) Recalcula solved e penalty de TODOS os times ---
+    const updatedRanking = teams.map(team => {
+        let visibleSolved = 0;
+        let visiblePenalty = 0;
+
+        for (const [pname, pdata] of Object.entries(team.problems || {})) {
+            // Só conta se: (1) está solved E (2) não tem freezeTries (já foi liberado)
+            if (pdata.solved && (pdata.freezeTries || 0) === 0) {
+                visibleSolved++;
+                const problemTime = typeof pdata.time === 'number' ? pdata.time : 0;
+                const problemTries = pdata.tries || 0;
+                visiblePenalty += problemTime + 20 * Math.max(0, problemTries - 1);
+            }
+        }
+
+        return {
+            ...team,
+            solved: visibleSolved,
+            penalty: visiblePenalty
+        };
+    });
+
+    // --- 4) Reordena o ranking ---
+    updatedRanking.sort((a, b) => {
+        if ((b.solved || 0) !== (a.solved || 0)) return (b.solved || 0) - (a.solved || 0);
+        if ((a.penalty || 0) !== (b.penalty || 0)) return (a.penalty || 0) - (b.penalty || 0);
+        return (a.userSite || '').localeCompare(b.userSite || '');
+    });
+
+    // Atualiza pos
+    for (let i = 0; i < updatedRanking.length; i++) {
+        updatedRanking[i].pos = i + 1;
+    }
+
+    return {
+        ranking: updatedRanking,
+        runs,
+        released: {
+            team: targetTeamUserSite,
+            problem: targetProblem,
+            countRequested: N,
+            countRunsUpdated: changed
+        }
+    };
+}
+
+
+
+
+
