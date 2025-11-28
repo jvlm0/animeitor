@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import * as cheerio from "cheerio";
+import fs from 'fs/promises';
+import path from 'path';
 
 const BASE_URL = 'http://maratona.td.utfpr.edu.br/boca';
 const FREEZE_TIME = 240;
@@ -8,7 +10,7 @@ const FREEZE_TIME = 240;
 
 globalThis.globalCookies = '';
 globalThis.teamsDict = {};
-globalThis.letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
+globalThis.letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'];
 
 
 function jsMyHash(value) {
@@ -113,7 +115,7 @@ export async function loga() {
         const usuario = process.env.BOCA_USER;
         const senha = process.env.BOCA_PASS;
 
-        
+
 
         const hash1 = jsMyHash(senha);
         const passwordHash = jsMyHash(hash1 + salt);
@@ -164,6 +166,48 @@ export async function loga() {
 
 export async function getTeamsDict() {
 
+    globalThis.teamsDict = {
+        "teamr29": "(UNICAMP) Yvensfobia",
+        "teamr11": "(UFPR) Mestres do Teorema",
+        "teamr22": "(UFSC-Joinville) CEMCodes: Programe enquanto eles dormem",
+        "teamr33": "(UFG) MONKEYS Pio Turbo Linear",
+        "teamr19": "(UNI) NoTraning",
+        "teamr31": "(ITA) Os Broncos",
+        "teamr25": "(UTFPR-TD) No meu pc funciona",
+        "teamr47": "(UFG) Monkeys: os últimos nunca serão os primeiros",
+        "teamr35": "(UFG) MONKEYS dimas turbo fanclub",
+        "teamr7": "(UFPR-Jandaia) Coisas ruins vão acontecer com pessoas boas",
+        "teamr6": "(Unioeste) outer wilds fan club",
+        "teamp10": "(UTFPR-TD) Quando é o coffee break ??????",
+        "teamr45": "(UnB) Pão e código",
+        "teamr24": "(UFS) EAI MARQUINHO DJ FAZ UM SAMPLEY DE GUITARRA",
+        "teamr36": "(IFSul-PF) Skibidi Solo",
+        "teamr20": "(URI-Erechim) coURIngados",
+        "teamr32": "(UFG) Monkeys: Frango Frito",
+        "teamr30": "(IFPR-Cascavel) Yes or No",
+        "teamr48": "(ITSSG) La Familia Waos",
+        "teamp2": "(UTFPR-TD) 3 belos",
+        "teamr9": "(UFPR) Juleia",
+        "teamp5": "(UTFPR-TD) Minecraft",
+        "teamp37": "(UTFPR-TD) Versão Sem o Carry",
+        "teamr13": "(UFPR) Beatriz e Gabriela",
+        "teamr21": "(UTFPR-TD) os amigos de pepi voltaram",
+        "teamr26": "(IFPR-Cascavel) InfoB.A.M.",
+        "teamr16": "(UFPR-JS) Discretinhos",
+        "teamp1": "(UTFPR-TD) equipe de um homem só",
+        "teamr34": "(IFPR-Cascavel) Solo vs trio",
+        "teamp12": "(UTFPR-TD) rapadura eh mole mas nao é doce",
+        "teamp3": "(UTFPR-TD) Team CSS/HTML",
+        "teamr28": "(IFPR-Cascavel) meninos superpoderosos",
+        "teamr18": "(IFPR-Cascavel) JaVái",
+        "teamr46": "(IFPR-Cascavel) Mega Knight",
+        "teamr15": "(UFPR) MCA",
+        "teamr14": "(UFPR-JS) Taxaram até o C#",
+        "teamr17": "(CEJLG) Equipe De Um Homem Só",
+        "teamr23": "(Universidade) MTH",
+        "teamr27": "(UMSA) Os Sabrossos"
+    };
+
     if (Object.keys(globalThis.teamsDict).length > 0) return globalThis.teamsDict;
 
     let data = await scrap();
@@ -192,7 +236,11 @@ export async function getTeamsDict() {
 export async function scrapRuns() {
     console.log('📊 Iniciando scraping da página de score...');
     const response = await fetchWithCookies('/judge/runchief.php');
-    const html = await response.text();
+
+    //const html = await response.text();
+
+    const filePath = path.join(process.cwd(), 'public', 'judge.html');
+    const html = await fs.readFile(filePath, 'utf8');
 
     if (html.includes('Session expired') || html.includes('log in again')) {
         console.error('⚠️ Sessão expirou durante o scraping!');
@@ -237,9 +285,9 @@ export async function scrapRuns() {
         // Extrai apenas YES / NO
         const answer = answerRaw.startsWith("YES") ? "YES" :
             answerRaw.startsWith("Not") ? "PENDING" :
-            answerRaw.startsWith("NO") ? "NO" : answerRaw;
+                answerRaw.startsWith("NO") ? "NO" : answerRaw;
 
-        
+
 
         // Também podemos extrair a descrição do erro, ex: "Wrong answer"
         const answerDetail = answerRaw.replace(/^YES|^NO|-|\s/g, "").trim();
@@ -449,10 +497,10 @@ export async function scrapLetters() {
 
 
 export async function computeRankingAtTimeWithPending(t, teamsDict, simulated) {
-    if(!simulated) {
+    if (!simulated) {
         t++;
     }
-    
+
     let runs = await scrapRuns();
 
     if (runs === 'Session expired') {

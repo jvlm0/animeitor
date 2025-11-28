@@ -14,6 +14,7 @@ import { renderProblemCell } from './scoreBoard/ProblemCell'
 import Scoreboard from './scoreBoard/index'
 
 
+
 export default function BrazilianFinals({ initialScoreboard = [],
     initialSubmissions = [],
     teamsDict = {},

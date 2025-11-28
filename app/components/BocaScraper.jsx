@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import BrazilianFinals from "./BrazilianFinals"
 import { fetchApi } from '../lib/api';
+import SedeFilter from './SedeFilter';
 
 export default function BocaScraper({ teamsDict = {}, 
                                       letters = [], 
@@ -14,6 +15,7 @@ export default function BocaScraper({ teamsDict = {},
   const [time, setTime] = useState(0);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sede, setSede] = useState('Todos');
 
   // Intervalo em milissegundos (2 segundos)
   const REFRESH_INTERVAL = 2000;
@@ -62,7 +64,7 @@ export default function BocaScraper({ teamsDict = {},
         return;
       }
         */
-      const response = await fetchApi('/api/boca-scraper?mode=getStateByTime');
+      const response = await fetchApi(`/api/boca-scraper?mode=getStateByTime&sede=${sede}`);
       const data = await response.json();
 
       if (data.success) {
@@ -73,7 +75,7 @@ export default function BocaScraper({ teamsDict = {},
     } catch (err) {
       setError('Erro ao buscar dados de score: ' + err.message);
     }
-  }, []);
+  }, [sede]);
 
   const handleScrapSub = useCallback(async () => {
     setError('');
@@ -147,8 +149,12 @@ export default function BocaScraper({ teamsDict = {},
     };
   }, [handleReleaseOneProblem]);
 
+  useEffect(() => {
+    fetchAllData();
+  }, [sede, fetchAllData]);
   return (
     <>
+    <SedeFilter currentSede={sede} onSedeChange={setSede} />
       <BrazilianFinals
         initialScoreboard={scoreData}
         initialSubmissions={submissions}

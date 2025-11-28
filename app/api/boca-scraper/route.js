@@ -1,13 +1,52 @@
 // app/api/boca-scraper/route.js
-import {loga, 
-        scrap, 
-        scrapRuns, 
-        getTeamsDict,
-        computeRankingAtTimeWithPending, 
-        scrapLetters} from '../../lib/lib'
+import {
+    loga,
+    scrap,
+    scrapRuns,
+    getTeamsDict,
+    computeRankingAtTimeWithPending,
+    scrapLetters
+} from '../../lib/lib'
 import { getCache, setCache, startScraperJob, stopJob } from '../../lib/scrapJob';
-import {releaseOneProblemFreeze} from '../../lib/realeseProblem';
+import { releaseOneProblemFreeze } from '../../lib/realeseProblem';
 
+
+
+
+// ✅ Nova função helper para filtrar por sede
+function filterBySede(cacheData, sede) {
+    if (!cacheData) return cacheData;
+    
+    // Se for "Todos", retorna tudo sem filtrar
+    if (sede === 'Todos') {
+        return cacheData;
+    }
+    
+    // Determina o prefixo baseado na sede
+    const prefixMap = {
+        'Toledo': 'teamtd',
+        'Curitiba': 'teamct',
+        'Remoto': 'teamr'
+    };
+    
+    const prefix = prefixMap[sede];
+    if (!prefix) return cacheData;
+    
+    // Filtra ranking
+    const filteredRanking = cacheData.ranking
+        .filter(team => team.userSite.startsWith(prefix))
+        .map((team, index) => ({ ...team, pos: index + 1 })); // ✅ Recalcula posições
+    
+    // Filtra runs
+    const filteredRuns = cacheData.runs
+        .filter(run => run.teamName.startsWith(prefix));
+    
+    return {
+        time: cacheData.time,
+        ranking: filteredRanking,
+        runs: filteredRuns
+    };
+}
 
 
 startScraperJob();
@@ -56,21 +95,29 @@ export async function GET(request) {
             }
         } else if (mode === 'getStateByTime') {
             const time = Number(searchParams.get('time'));
-            data = getCache();
+            const sede = searchParams.get('sede') || 'Todos'; // ✅ Novo parâmetro
+
+            const fullData = getCache();
+
+            // ✅ Filtra ranking e runs com base na sede
+            const filteredData = filterBySede(fullData, sede);
+
+            data = filteredData;
         } else if (mode === 'letters') {
-            data = await scrapLetters();
-            if (data === 'Session expired') {
-                await loga();
-                data = await scrapLetters();
-            }
+            //data = await scrapLetters();
+            //if (data === 'Session expired') {
+            //    await loga();
+            data = globalThis.letters;
+            //} 
+
         } else if (mode === 'releaseOneProblem') {
-            
+
             const ranking = getCache().ranking;
             const runs = getCache().runs;
 
-            const result =  releaseOneProblemFreeze(ranking, runs);
+            const result = releaseOneProblemFreeze(ranking, runs);
             setCache(result.ranking, result.runs);
-            
+
         } else if (mode === 'start') {
             data = 'scrap iniciado';
             await startScraperJob();
