@@ -13,6 +13,8 @@
 # testing
 /coverage
 
+/public/judge.html
+
 # next.js
 /.next/
 /out/

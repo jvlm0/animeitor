@@ -25,7 +25,7 @@ function filterBySede(cacheData, sede) {
 
     // Determina o prefixo baseado na sede
     const prefixMap = {
-        'Toledo': 'teamp',
+        'Toledo': 'teamtd',
         'Curitiba': 'teamct',
         'Remoto': 'teamr'
     };

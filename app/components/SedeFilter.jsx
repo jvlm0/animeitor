@@ -9,7 +9,7 @@ export default function SedeFilter({ currentSede, onSedeChange }) {
   ];
 
   return (
-    <div className="mb-4 flex gap-3 justify-center">
+    <div className="mt-4 mb-4 flex gap-3 justify-center">
       {sedes.map(({ name, color }) => (
         <button
           key={name}
