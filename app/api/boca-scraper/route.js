@@ -55,8 +55,12 @@ export async function GET(request) {
                 data = await initGlobals();
             }
         } else if (mode === 'getStateByTime') {
-            const time = Number(searchParams.get('time'));
-            data = getCache();
+            const filtro = searchParams.get('sede');
+            if (filtro !== null) {
+                data = getCache(filtro);
+            } else {
+                data = getCache();
+            }
         } else if (mode === 'letters') {
             data = await scrapLetters();
             if (data === 'Session expired') {

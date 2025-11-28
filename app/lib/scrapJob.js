@@ -46,23 +46,23 @@ async function fetchContestInfoFromApi() {
 
 async function runScraper() {
   console.log("[JOB] Rodando scraper...");
-  
+
   // ✅ Busca contest atualizado a cada execução
   contest = await fetchContestInfoFromApi();
   console.log(`[JOB] Contest: ${contest.contestName}, Start: ${contest.startTime}, Multiplo: ${contest.multiplo}, Simulate: ${contest.simulate}`);
-  
+
   const time = minutosDesde(contest.startTime, contest.multiplo);
   console.log(`[JOB] Tempo calculado: ${time.toFixed(2)} minutos`);
 
   if (time <= CONTEST_TIME || cache == null) {
-    let data; 
+    let data;
     if (contest.simulate) {
       data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict, contest.simulate);
     } else {
       //data = await computeFullRanking(time, globalThis.teamsDict);
       data = await computeRankingAtTimeWithPending(10000, globalThis.teamsDict, contest.simulate);
     }
-    
+
     cache = data;
     console.log("[JOB] Cache atualizado!");
   } else {
@@ -84,7 +84,7 @@ export async function startScraperJob() {
   }
 
   console.log("🔄 Iniciando job periódico...");
-  
+
   // ✅ SEMPRE busca contestInfo atualizado ao iniciar
   contest = await fetchContestInfoFromApi();
   console.log(`[JOB] Configuração carregada:`, contest);
@@ -105,8 +105,31 @@ export async function startScraperJob() {
   }
 }
 
-export function getCache() {
-  return cache;
+export function getCache(sede = 'all') {
+  if (!cache) return null;
+  const sedeLower = sede.toLowerCase();
+  switch (sedeLower) {
+    case 'toledo':
+      return {
+        time: cache.time,
+        ranking: cache.ranking.filter(team => team.userSite.startsWith('teamtd')),
+        runs: cache.runs.filter(run => run.teamName.startsWith('teamtd'))
+      };
+    case 'curitiba':
+      return {
+        time: cache.time,
+        ranking: cache.ranking.filter(team => team.userSite.startsWith('teamct')),
+        runs: cache.runs.filter(run => run.teamName.startsWith('teamct'))
+      };
+    case 'remoto':
+      return {
+        time: cache.time,
+        ranking: cache.ranking.filter(team => team.userSite.startsWith('teamr')),
+        runs: cache.runs.filter(run => run.teamName.startsWith('teamr'))
+      };
+    default:
+      return cache;
+  }
 }
 
 export function setCache(ranking, runs) {
@@ -121,19 +144,19 @@ export function stopJob() {
     console.log("[JOB] Job já estava parado");
     return;
   }
-  
+
   console.log("[JOB] 🛑 Parando job...");
-  
+
   // ✅ Limpa TUDO para garantir que pode reiniciar
   isJobStarted = false;
-  
+
   if (jobId) {
     clearInterval(jobId);
     jobId = null;
   }
-  
+
   // ✅ Opcional: limpar o contest também para forçar reload
   contest = null;
-  
+
   console.log("✅ Job parado com sucesso!");
 }
