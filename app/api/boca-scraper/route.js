@@ -9,6 +9,7 @@ import {
 } from '../../lib/lib'
 import { getCache, setCache, startScraperJob, stopJob } from '../../lib/scrapJob';
 import { releaseOneProblemFreeze } from '../../lib/realeseProblem';
+import { time } from 'console';
 
 
 
@@ -112,10 +113,17 @@ export async function GET(request) {
 
         } else if (mode === 'releaseOneProblem') {
 
-            const ranking = getCache().ranking;
-            const runs = getCache().runs;
+            const sede = searchParams.get('sede') || 'Todos';
+
+            const fullData = getCache();
+            // ✅ Filtra ranking e runs com base na sede
+            const filteredData = filterBySede(fullData, sede);
+
+            const ranking = filteredData.ranking;
+            const runs = filteredData.runs;
 
             const result = releaseOneProblemFreeze(ranking, runs);
+            
             setCache(result.ranking, result.runs);
 
         } else if (mode === 'start') {

@@ -59,11 +59,10 @@ export default function BocaScraper({ teamsDict = {},
   const handleScrapeByTime = useCallback(async () => {
     setError('');
     try {
-      /*
-      if (minutosDesde(contestTime) > 300) {
-        return;
-      }
-        */
+      //if (minutosDesde(contestTime) > 300) {
+      //  return;
+      //}
+      
       const response = await fetchApi(`/api/boca-scraper?mode=getStateByTime&sede=${sede}`);
       const data = await response.json();
 
@@ -96,14 +95,14 @@ export default function BocaScraper({ teamsDict = {},
     setError('');
 
     try {
-      const response = await fetchApi('/api/boca-scraper?mode=releaseOneProblem');
-      const data = await response.json();
-
-      if (data.success) {
-        setScoreData(data.data.ranking);
-        setSubmissions(data.data.runs);
-        setTime(data.data.time);
-      }
+      const response = await fetchApi('/api/boca-scraper?mode=releaseOneProblem'+`&sede=${sede}`);
+      //const data = await response.json();
+//
+      //if (data.success) {
+      //  setScoreData(data.data.ranking);
+      //  setSubmissions(data.data.runs);
+      //  setTime(data.data.time);
+      //}
     } catch (err) {
       setError('Erro ao liberar problema: ' + err.message);
     }
