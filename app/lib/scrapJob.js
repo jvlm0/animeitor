@@ -60,7 +60,7 @@ async function runScraper() {
       data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict, contest.simulate);
     } else {
       //data = await computeFullRanking(time, globalThis.teamsDict);
-      data = await computeRankingAtTimeWithPending(10000, globalThis.teamsDict, contest.simulate);
+      data = await computeRankingAtTimeWithPending(time, globalThis.teamsDict, contest.simulate);
     }
     
     cache = data;

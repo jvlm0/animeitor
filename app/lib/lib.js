@@ -209,7 +209,7 @@ export async function getTeamsDict() {
     };
     */
 
-    if (Object.keys(globalThis.teamsDict).length > 0) return globalThis.teamsDict;
+    //if (Object.keys(globalThis.teamsDict).length > 0) return globalThis.teamsDict;
 
     let data = await scrap();
 
@@ -230,6 +230,8 @@ export async function getTeamsDict() {
     data.forEach((el) => {
         globalThis.teamsDict[el.userSite.split("/")[0]] = el.name;
     })
+
+    
 
     return globalThis.teamsDict;
 }

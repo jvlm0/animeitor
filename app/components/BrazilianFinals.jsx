@@ -62,6 +62,7 @@ export default function BrazilianFinals({ initialScoreboard = [],
 
     // Inicializa o scoreboard com IDs únicos
     useEffect(() => {
+        //if (initialScoreboard.length <= 0) return;
         //if (initialScoreboard.length > 0) {
         const formattedScoreboard = initialScoreboard.map((team, index) => {
             const teamName = team.userSite.split('/')[0];

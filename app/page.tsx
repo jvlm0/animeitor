@@ -34,7 +34,10 @@ export default function Home() {
   useEffect(() => {
     fetchApi('/api/boca-scraper?mode=teamsDict')
       .then(res => res.json())
-      .then(data => setTeams(data.data));
+      .then(data => {
+        setTeams(data.data)
+        console.log('📦 Dados recebidos de /api/boca-scraper?mode=teamsDict:', data);
+      });
   }, []);
 
 
